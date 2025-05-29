@@ -13,6 +13,10 @@ import time
 def obtain_prices_eldorado_sel(price_max):   
 #url de la pagina
  
+     print("aaaaurita")
+     print("prueba de github")
+     print("estoy escribiendo en el repositorio?")
+     print("que significa repositorio ? nunca lei la definicion")
      options = webdriver.ChromeOptions()
      options.add_argument("--headless")
      options.add_argument("--disable-gpu")
