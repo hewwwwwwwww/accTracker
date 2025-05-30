@@ -39,6 +39,22 @@ def get_current_summoner():
         "Authorization": f"Basic {auth}"
     }
 
+   # Obtener campeones comprados
+    print("campeones comprados:")
+    champ_url = f"https://127.0.0.1:{info['port']}/lol-champions/v1/owned-champions-minimal"
+    champ_response = requests.get(champ_url, headers=headers, verify=False)
+    print("campones comprados : {champ_response}")
+    if champ_response.status_code == 200:
+        champs = champ_response.json()
+        print("\nCampeones comprados:")
+        for champ in champs:
+            print(f"- ID: {champ['id']}")
+    else:
+        print("\nError al obtener campeones.")
+        print(champ_response.text)
+
+
+
     url = f"https://127.0.0.1:{info['port']}/lol-summoner/v1/current-summoner"
     urllib3.disable_warnings()  # para evitar warning de certificado no válido
 
@@ -52,6 +68,8 @@ def get_current_summoner():
     else:
         print(f"Error al obtener datos: {response.status_code}")
         print(response.text)
+
+  
 
 if __name__ == "__main__":
     get_current_summoner()
