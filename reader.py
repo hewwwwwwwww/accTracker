@@ -88,8 +88,39 @@ def get_current_summoner():
     else:
         print(f"Error al obtener datos: {response.status_code}")
         print(response.text)
-def get_summoner_skins():
-    print("\nObteniendo datos de skins desde CommunityDragon para análisis...")
+        
+def get_owned_skins():
+    lockfile = get_lockfile()
+    if not lockfile:
+        print("No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
+        return
+
+    info = parse_lockfile(lockfile)
+    auth = base64.b64encode(f"riot:{info['password']}".encode()).decode()
+    headers = {
+        "Authorization": f"Basic {auth}"
+    }
+
+    urllib3.disable_warnings()
+
+    # Endpoint correcto
+    skins_url = f"https://127.0.0.1:{info['port']}/lol-inventory/v2/inventory/CHAMPION_SKIN"
+    response = requests.get(skins_url, headers=headers, verify=False)
+
+    if response.status_code == 200:
+        data = response.json()
+
+        print("\nSkins compradas por la cuenta:")
+        for item in data:  # 🔥 Ahora recorremos la lista directamente
+            print(f"- ID: {item['itemId']} (Comprada el {item['purchaseDate']})")
+    else:
+        print(f"Error al obtener skins: {response.status_code}")
+        print(response.text)
+
+import requests
+
+def get_skin_names(skin_ids):
+    print("\nObteniendo nombres de skins desde CommunityDragon...")
 
     cdragon_url = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/skins.json"
 
@@ -98,27 +129,103 @@ def get_summoner_skins():
         response.raise_for_status()
         data = response.json()
 
-        # Mostrar tipo de dato recibido
-        print(f"Tipo de dato recibido: {type(data)}")
-
-        # Mostrar las primeras 3 entradas o keys, según tipo
-        if isinstance(data, list):
-            print(f"Primeras 3 skins del JSON:")
-            for skin in data[:3]:
-                print(skin)
-        elif isinstance(data, dict):
-            print(f"Primeras 3 claves del diccionario:")
-            keys = list(data.keys())[:3]
-            for k in keys:
-                print(f"{k}: {data[k]}")
-        else:
-            print("Formato inesperado del JSON.")
+        # Buscar nombres de skins por ID
+        id_to_skin = {skin["id"]: skin["name"] for skin in data.values()}
+        
+        print("\nSkins compradas con sus nombres:")
+        for skin_id in skin_ids:
+            nombre_skin = id_to_skin.get(skin_id, f"Desconocido (ID: {skin_id})")
+            print(f"- {nombre_skin}")
 
     except Exception as e:
-        print(f"Error al obtener o procesar datos de CommunityDragon: {e}")
+        print(f"Error al obtener datos: {e}")
+
+# Lista de IDs obtenidas
+skin_ids = [
+    39040, 555016, 48001, 39041, 60034, 39042, 412036, 134016, 21002, 53003, 
+    106001, 266007, 127001, 21016, 21021, 21023, 21024, 21025, 21026, 21027, 
+    21028, 21029, 127012, 84004, 127014, 127019, 30001, 22067, 22069, 22070, 
+    22071, 222004, 22072, 63033, 22073, 22074, 22075, 63037, 63039, 35015, 
+    35016, 13003, 35020, 13005, 4045, 35022, 4046, 51022, 4047, 51024, 51025, 
+    51026, 13011, 51027, 45013, 45015, 45016, 45021, 45032, 236008, 28015, 
+    22007, 412028, 236024, 11003, 39037, 39039
+]
+def verificar_skins_compradas(skins_obtenidas, skins_reales):
+    print("\nVerificación cruzada de skins compradas...")
+
+    skins_validadas = [skin_id for skin_id in skins_obtenidas if skin_id in skins_reales]
+
+    print("\n✅ Lista final de skins confirmadas:")
+    for skin_id in skins_validadas:
+        print(f"- ID: {skin_id}")
+
+    print(f"\n📌 Total de skins confirmadas: {len(skins_validadas)} / {len(skins_reales)} esperadas.")
+    
+# Lista de IDs obtenidas desde la API del cliente
+skins_obtenidas = [
+    39040, 555016, 48001, 39041, 60034, 39042, 412036, 134016, 21002, 53003, 
+    106001, 266007, 127001, 21016, 21021, 21023, 21024, 21025, 21026, 21027, 
+    21028, 21029, 127012, 84004, 127014, 127019, 30001, 22067, 22069, 22070, 
+    22071, 222004, 22072, 63033, 22073, 22074, 22075, 63037, 63039, 35015, 
+    35016, 13003, 35020, 13005, 4045, 35022, 4046, 51022, 4047, 51024, 51025, 
+    51026, 13011, 51027, 45013, 45015, 45016, 45021, 45032, 236008, 28015, 
+    22007, 412028, 236024, 11003, 39037, 39039
+]
+
+# Lista real de skins en tu cuenta (las que ves en el cliente)
+skins_reales = [
+    39040, 555016, 48001, 60034, 134016, 21002, 53003, 106001, 266007, 127001, 
+    21016, 21021, 84004, 127012, 30001, 22067, 22069, 222004, 63033, 35015, 
+    13003, 13005, 4045, 51022, 51027, 45013, 45032, 236008, 28015, 412028, 
+    11003, 39037
+]
+
+# Ejecutar la verificación
+verificar_skins_compradas(skins_obtenidas, skins_reales)
+
+
+import requests
+
+def get_skin_names(skin_ids):
+    print("\nObteniendo nombres de skins desde CommunityDragon...")
+
+    cdragon_url = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/skins.json"
+
+    try:
+        response = requests.get(cdragon_url)
+        response.raise_for_status()
+        data = response.json()
+
+        # Crear un diccionario con los nombres de skins
+        id_to_skin = {skin["id"]: skin["name"] for skin in data.values()}
+        
+        print("\n✅ Lista final de skins confirmadas con nombres:")
+        for skin_id in skin_ids:
+            nombre_skin = id_to_skin.get(skin_id, f"Desconocido (ID: {skin_id})")
+            print(f"- {nombre_skin}")
+
+    except Exception as e:
+        print(f"Error al obtener datos: {e}")
+
+# Lista final de skins confirmadas
+skins_confirmadas = [
+    39040, 555016, 48001, 60034, 134016, 21002, 53003, 106001, 266007, 127001, 
+    21016, 21021, 84004, 127012, 30001, 22067, 22069, 222004, 63033, 35015, 
+    13003, 13005, 4045, 51022, 51027, 45013, 45032, 236008, 28015, 412028, 
+    11003, 39037
+]
+
+# Ejecutar función
+get_skin_names(skins_confirmadas)
+
+
+    
 
         
 
 if __name__ == "__main__":
-    get_current_summoner()
-    get_summoner_skins()
+   print("a")
+   #get_current_summoner()
+   # get_owned_skins()
+    #get_skin_names(skin_ids)
+   
