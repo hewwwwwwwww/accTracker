@@ -88,6 +88,37 @@ def get_current_summoner():
     else:
         print(f"Error al obtener datos: {response.status_code}")
         print(response.text)
+def get_summoner_skins():
+    print("\nObteniendo datos de skins desde CommunityDragon para análisis...")
+
+    cdragon_url = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/skins.json"
+
+    try:
+        response = requests.get(cdragon_url)
+        response.raise_for_status()
+        data = response.json()
+
+        # Mostrar tipo de dato recibido
+        print(f"Tipo de dato recibido: {type(data)}")
+
+        # Mostrar las primeras 3 entradas o keys, según tipo
+        if isinstance(data, list):
+            print(f"Primeras 3 skins del JSON:")
+            for skin in data[:3]:
+                print(skin)
+        elif isinstance(data, dict):
+            print(f"Primeras 3 claves del diccionario:")
+            keys = list(data.keys())[:3]
+            for k in keys:
+                print(f"{k}: {data[k]}")
+        else:
+            print("Formato inesperado del JSON.")
+
+    except Exception as e:
+        print(f"Error al obtener o procesar datos de CommunityDragon: {e}")
+
+        
 
 if __name__ == "__main__":
     get_current_summoner()
+    get_summoner_skins()
