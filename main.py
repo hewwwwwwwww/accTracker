@@ -7,8 +7,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 
-from servers import SERVERS_URLS
-from ranks import RANKS_URL  # asumo que haces otro archivo con los rangos
+from diccionarios import SERVERS_URLS
+from diccionarios import RANKS_URL  # asumo que haces otro archivo con los rangos
 
 def url_por_servidor(servidor_key):
     """Devuelve el fragmento de URL para el servidor"""
