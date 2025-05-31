@@ -65,9 +65,19 @@ def get_current_summoner():
 
     if champ_response.status_code == 200:
         champs = champ_response.json()
+        print("⭐ BUDA  ⭐  BOOST ⭐\n")
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━")
         get_summoner_basic_info()
         get_current_ranked_info()
-       # get_champion_and_skin_counts()
+        skinz = get_skins_count()
+        cant_champs=get_champion_count()
+        print(f"👤 Champions: {cant_champs}")
+        print(f"🎨 Skins: {skinz}")
+        get_loot_info()
+        print("🔄 Can change nickname\n✉️ "" Can change e-mail\n🔐 Full access\n✅ 0% Ban Chance\n🚀 Instant Delivery")
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━")
+       
+
 
 
         print(f"\nChampions ({len(champs)}):")
@@ -81,7 +91,8 @@ def get_current_summoner():
     else:
         print("\nError al obtener campeones.")
         print(champ_response.text)
-
+    
+    
     # --- SIN CAMBIOS: obtener datos del invocador
     url = f"https://127.0.0.1:{info['port']}/lol-summoner/v1/current-summoner"
     response = requests.get(url, headers=headers, verify=False)
@@ -94,7 +105,8 @@ def get_current_summoner():
     else:
         print(f"Error al obtener datos: {response.status_code}")
         print(response.text)
-        
+     
+
 
 # ... (mantén las demás funciones como antes)
 
@@ -201,8 +213,8 @@ def get_summoner_basic_info():
 
         region_legible = region_map.get(tag_line.lower(), tag_line.upper())
 
-        print(f"🌐 Servidor: {region_legible}")
-        print(f"📈 Nivel: {nivel}")
+        print(f"🌐 Server: {region_legible}")
+        print(f"📈 Level: {nivel}")
 
         return {
             'servidor': region_legible,
@@ -245,8 +257,9 @@ def get_current_ranked_info():
             total_games = wins + losses
             winrate = round((wins / total_games) * 100, 1) if total_games > 0 else 0.0
 
-            print(f"🎯 Rango actual SoloQ: {tier} {division} - {lp} LP")
-            print(f"🏆 Winrate: {winrate}% ({wins}W / {losses}L)")
+            print(f"🎯 Rank(Soloq): {tier} {division} - {lp} LP")
+            print(f"📊 Winrate: {winrate}% ({wins}W / {losses}L)")
+
 
             return {
                 'rango': f"{tier} {division}",
@@ -270,16 +283,6 @@ def get_current_ranked_info():
         print(response.text)
         return None
 
-def get_champion_and_skin_counts(total_champions=None, total_skins=None):
-    if total_champions is None:
-        total_champions = get_current_summoner()
-    if total_skins is None:
-        total_skins = get_show_skins()
-
-    print(f"🎮 Campeones: {total_champions}")
-    print(f"🎨 Skins: {total_skins}")
-
-    return total_champions, total_skins
 
 def get_loot_info():
     lockfile = get_lockfile()
@@ -326,23 +329,112 @@ def get_loot_info():
         elif loot_id.startswith("CHEST"):
             hextech_chests += count
         elif loot_id.startswith("MATERIAL_key_fragment") or loot_id == "MATERIAL_key":
-            hextech_keys += count
+            hextech_keys += count 
+        
 
-    print(f"\n🔹 Fragmentos de campeón: {champ_shards}")
-    print(f"🔸 Fragmentos de skin: {skin_shards}")
-    print(f"🔵 Esencia azul: {blue_essence}")
-    print(f"🟠 Esencia naranja: {orange_essence}")
-    print(f"📦 Cofres Hextech: {hextech_chests}")
-    print(f"🗝️ Llaves Hextech: {hextech_keys}")
+
+
+# Mostrar resultados (fuera del for)
+
+    if champ_shards != 0:
+     print(f"🔹 Champion shards: {champ_shards}")
+    if skin_shards != 0:
+     print(f"🔸 Skin shards: {skin_shards}")
+    if blue_essence > 499:
+     print(f"🔵 Blue essence: {blue_essence}")
+    if orange_essence > 499:
+     print(f"🟠 Orange essence: {orange_essence}")
+    if hextech_chests > 0:
+     print(f"📦 Hextech chests: {hextech_chests}")
+    if hextech_keys > 0:
+     print(f"🗝️ Hextech keys: {hextech_keys}")
+
+    return loot
+def get_champion_count():
+    lockfile = get_lockfile()
+    if not lockfile:
+        print("No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
+        return 0
+
+    info = parse_lockfile(lockfile)
+    auth = base64.b64encode(f"riot:{info['password']}".encode()).decode()
+    headers = {"Authorization": f"Basic {auth}"}
+
+    champ_url = f"https://127.0.0.1:{info['port']}/lol-champions/v1/owned-champions-minimal"
+    response = requests.get(champ_url, headers=headers, verify=False)
+
+    if response.status_code == 200:
+        champions = response.json()
+        return len(champions)
+    else:
+        print("Error al obtener campeones:", response.status_code)
+        return 0
+    
+    
+
+def get_skins_count():
+    lockfile = get_lockfile()
+    if not lockfile:
+        print("❌ No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
+        return
+
+    info = parse_lockfile(lockfile)
+    auth = base64.b64encode(f"riot:{info['password']}".encode()).decode()
+    headers = {
+        "Authorization": f"Basic {auth}"
+    }
+    urllib3.disable_warnings()
+
+    response = requests.get(f"https://127.0.0.1:{info['port']}/lol-inventory/v2/inventory/CHAMPION_SKIN", headers=headers, verify=False)
+    if response.status_code != 200:
+        print(f"❌ Error al obtener skins: {response.status_code}")
+        return
+
+    skins_data = response.json()
+    owned_skin_ids = [skin['itemId'] for skin in skins_data]
+    
+
+    #print("\n📦 Obteniendo base de datos de skins desde CommunityDragon...")
+    cdragon_url = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/skins.json"
+
+    try:
+        cdragon_response = requests.get(cdragon_url)
+        cdragon_response.raise_for_status()
+        skin_db = cdragon_response.json()
+        id_to_name = {skin["id"]: skin["name"] for skin in skin_db.values()}
+    except Exception as e:
+        print(f"❌ Error al obtener datos de CommunityDragon: {e}")
+        return
 
     
+    #para poder sacar la cantidad y mostrarlas en formato correcto
+    reconocidas = 0
+    reconocidas_str = []  # Lista para almacenar strings con el formato "- Nombre"
+    no_reconocidas = []
+
+    for skin_id in owned_skin_ids:
+        nombre = id_to_name.get(skin_id)
+        if nombre: 
+            reconocidas += 1
+        else:
+            no_reconocidas.append(skin_id)
+
+
+   
+    return (reconocidas)
+
+
 
         
 
 if __name__ == "__main__":
     total_champions = get_current_summoner()
     total_skins = get_show_skins()
-   # get_summoner_basic_info()
-    #get_current_ranked_info()
-    #get_champion_and_skin_counts(total_champions, total_skins)
-    get_loot_info()
+    
+    
+    
+   
+    
+    
+   
+    
