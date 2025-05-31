@@ -8,3 +8,4 @@ SERVERS_URLS = {
     "eune": "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?te_v0=Europe%20Nordic%20%26%20East",
     "euw": "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?te_v0=Europe%20West",
 }
+
