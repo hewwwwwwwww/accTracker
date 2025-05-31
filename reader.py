@@ -82,7 +82,7 @@ def get_current_summoner():
     if response.status_code == 200:
         summoner = response.json()
         print("\nDatos del invocador:")
-        for key, value in summoner.items():
+        for key, value in summoner.items(): 
             print(f"{key}: {value}")
         return summoner
     else:
@@ -126,25 +126,24 @@ def get_show_skins():
         print(f"❌ Error al obtener datos de CommunityDragon: {e}")
         return
 
-    print(f"\n Primer print de las skins:")  # LINEA IMPORTANTE : LISTA DE SKINS
+    print(f"\nPrimer print de las skins:")  # LINEA IMPORTANTE : LISTA DE SKINS
+
     reconocidas = 0
-    reconocidas_str=[]
+    reconocidas_str = []  # Lista para almacenar strings con el formato "- Nombre"
     no_reconocidas = []
-    
+
     for skin_id in owned_skin_ids:
         nombre = id_to_name.get(skin_id)
         if nombre:
-            print(f"- {nombre}")
+            reconocidas_str.append(f"- {nombre}")  # Agrega a la lista formateado
             reconocidas += 1
-            
-
         else:
             no_reconocidas.append(skin_id)
-            
 
-    print(f"\n✅ Total de skins reconocidas: len({reconocidas})")
-    final_message = f"Skins({reconocidas})"
-    print(reconocidas_str)
+    # Construir mensaje final
+    final_message = f" Skins ({reconocidas}):"
+    print("\n" + final_message)
+    print("\n".join(reconocidas_str))  # Imprime todas las skins formateadas
 
     
 
