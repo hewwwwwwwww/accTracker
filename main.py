@@ -7,9 +7,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 
+from servers import SERVERS_URLS
+
 def obtain_prices_eldorado_sel(price_max):
-    print("aaaaurita")
-    print("prueba de github")
     print("estoy escribiendo en el repositorio?")
     print("que significa repositorio ? nunca lei la definicion")
 
