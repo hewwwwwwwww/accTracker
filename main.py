@@ -1,3 +1,4 @@
+import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.edge.service import Service
@@ -7,7 +8,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 
-from clases.listing import Publicacion
+from clases.listing import Listing
 from diccionarios.servers import SERVERS_URLS
 from diccionarios.ranks import RANKS_URL
 
@@ -82,14 +83,17 @@ def get_prices_eldorado(server=None, rank=None):
             price_element = offer.find_element(By.CLASS_NAME, "font-size-18")
             title = title_element.text
             price = price_element.text
+            url = offer.get_attribute("href")
 
             print(f"Title found: '{title}'")
             print(f"Raw price: '{price}'")
+            print(f"URL found: '{url}'")
 
             price_num = float(price.replace("$", "").strip())
             print(f"Converted price to float: {price_num}")
 
             listing = Listing(title, price_num)
+            listing.url = url  # agregamos el atributo url al objeto Listing
             listings.append(listing)
         except Exception as e:
             print(f"Error extracting account: {e}")
@@ -121,6 +125,67 @@ def filter_viable_accounts(listings, max_diff_percent):
     return viable_accounts
 
 
+def filter_below_average(viable_accounts, below_percent):
+    if not viable_accounts:
+        return []
+
+    avg_price = sum(acc.price for acc in viable_accounts) / len(viable_accounts)
+    # El umbral es el precio promedio menos el porcentaje below_percent
+    threshold = avg_price * (1 - below_percent / 100)
+
+    # Filtramos las cuentas cuyo precio sea menor o igual al umbral calculado
+    filtered_accounts = [acc for acc in viable_accounts if acc.price <= threshold]
+
+    print(f"\nAverage price: ${avg_price:.2f}")
+    print(f"Filtering accounts that are at least {below_percent}% cheaper than average (<= ${threshold:.2f}):")
+    for acc in filtered_accounts:
+        print(acc)
+
+    return filtered_accounts
+
+
+def send_discord_message(webhook_url, message):
+    data = {
+        "content": message
+    }
+    try:
+        response = requests.post(webhook_url, json=data)
+        if response.status_code == 204:
+            print("Mensaje enviado correctamente a Discord.")
+        else:
+            print(f"Error enviando mensaje a Discord: {response.status_code}, {response.text}")
+    except Exception as e:
+        print(f"Excepción enviando mensaje a Discord: {e}")
+
+
+def process_accounts(server, rank, max_diff_percent, below_percent, discord_webhook_url):
+    """
+    Función que procesa cuentas de un servidor y rango específicos, filtra las cuentas viables
+    y envía un mensaje a Discord con la información de las cuentas filtradas.
+
+    :param server: Clave del servidor (ej. "na")
+    :param rank: Clave del rango (ej. "emerald")
+    :param max_diff_percent: Porcentaje máximo de diferencia para detener el guardado de publicaciones
+    :param below_percent: Porcentaje para definir las publicaciones válidas
+    :param discord_webhook_url: URL del webhook de Discord para enviar mensajes
+    """
+    listings = get_prices_eldorado(server=server, rank=rank)
+    viable_accounts = filter_viable_accounts(listings, max_diff_percent=max_diff_percent)
+    filtered_accounts = filter_below_average(viable_accounts, below_percent=below_percent)
+
+    for account in filtered_accounts:
+        message = (
+            f"Cuenta viable para control:\n"
+            f"Titulo: {account.title}\n"
+            f"Precio: ${account.price}\n"
+            f"Link: {account.url}"
+        )
+        send_discord_message(discord_webhook_url, message)
+
+
 if __name__ == "__main__":
-    listings = get_prices_eldorado(server="na", rank="emerald")
-    viable_accounts = filter_viable_accounts(listings, max_diff_percent=35)
+    DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1378220604058112081/F67MNaoZOF0R5Vxl6NlMmHCLUEm5fTKwBgvJkTEZjP2Lhima8IgSi96Bu_VSa4rsh4oz"
+
+    # Llamadas a la función process_accounts para diferentes servidores y rangos
+    process_accounts(server="na", rank="emerald", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
+    # Puedes agregar más llamadas a process_accounts con diferentes parámetros según sea necesario
