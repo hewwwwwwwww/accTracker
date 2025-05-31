@@ -92,7 +92,7 @@ def get_current_summoner():
 
 # ... (mantén las demás funciones como antes)
 
-def obtener_skins_y_mostrarlas():
+def get_show_skins():
     lockfile = get_lockfile()
     if not lockfile:
         print("❌ No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
@@ -112,6 +112,7 @@ def obtener_skins_y_mostrarlas():
 
     skins_data = response.json()
     owned_skin_ids = [skin['itemId'] for skin in skins_data]
+    
 
     print("\n📦 Obteniendo base de datos de skins desde CommunityDragon...")
     cdragon_url = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/skins.json"
@@ -125,24 +126,33 @@ def obtener_skins_y_mostrarlas():
         print(f"❌ Error al obtener datos de CommunityDragon: {e}")
         return
 
-    print("\n🎨 Skins reconocidas por CommunityDragon:")
+    print(f"\n Primer print de las skins:")  # LINEA IMPORTANTE : LISTA DE SKINS
     reconocidas = 0
+    reconocidas_str=[]
     no_reconocidas = []
-
+    
     for skin_id in owned_skin_ids:
         nombre = id_to_name.get(skin_id)
         if nombre:
             print(f"- {nombre}")
             reconocidas += 1
+            
+
         else:
             no_reconocidas.append(skin_id)
+            
 
-    print(f"\n✅ Total de skins reconocidas: {reconocidas}")
-    if no_reconocidas:
-        print(f"⚠️  Skins no reconocidas (posibles IDs especiales o nuevas):")
-        for id_ in no_reconocidas:
-            print(f"- ID: {id_}")
-        print(f"Total no reconocidas: {len(no_reconocidas)}")
+    print(f"\n✅ Total de skins reconocidas: len({reconocidas})")
+    final_message = f"Skins({reconocidas})"
+    print(reconocidas_str)
+
+    
+
+    #if no_reconocidas:
+       # print(f"⚠️  Skins no reconocidas (posibles IDs especiales o nuevas):") || printf para ver las id no reconocidas
+       # for id_ in no_reconocidas:
+           # print(f"- ID: {id_}")
+       # print(f"Total no reconocidas: {len(no_reconocidas)}")
 
 
 
@@ -154,5 +164,5 @@ def obtener_skins_y_mostrarlas():
 
 if __name__ == "__main__":
    get_current_summoner()
-   obtener_skins_y_mostrarlas()
+   get_show_skins()
    
