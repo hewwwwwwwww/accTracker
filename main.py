@@ -16,7 +16,7 @@ def url_por_servidor(servidor_key):
 
 def url_por_rango(rango_key):
     """Devuelve el fragmento de URL para el rango"""
-    return RANKS_URLS.get(rango_key, "")
+    return RANKS_URL.get(rango_key, "")
 
 def agregar_orden_precio(url):
     """Agrega el ordenamiento de precio ascendente a la URL"""
@@ -66,7 +66,7 @@ def obtain_prices_eldorado_sel(price_max, servidor=None, rango=None):
     driver.get(url)
     time.sleep(5)
 
-    print(driver.page_source)
+    # Guardamos el código fuente en archivo para debug pero no imprimimos en consola
     with open("debug_output.html", "w", encoding="utf-8") as f:
         f.write(driver.page_source)
 
@@ -77,7 +77,7 @@ def obtain_prices_eldorado_sel(price_max, servidor=None, rango=None):
             EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a.offer-item"))
         )
     except Exception as e:
-        print("No se pudo cargar la lista de cuentas\n")
+        print("No se pudo cargar la lista de cuentas\n", e)
         driver.quit()
         return
 
@@ -85,22 +85,32 @@ def obtain_prices_eldorado_sel(price_max, servidor=None, rango=None):
     print(f"Cantidad de cuentas encontradas: {len(offers)}")
 
     for offer in offers:
-        try:
-            title = offer.find_element(By.CLASS_NAME, "offer-title").text
-            price = offer.find_element(By.CLASS_NAME, "font-size-18").text
-            price_num = float(price.replace("$", "").strip())
+     try:
+        title_element = offer.find_element(By.CLASS_NAME, "offer-title")
+        price_element = offer.find_element(By.CLASS_NAME, "font-size-18")
+        title = title_element.text
+        price = price_element.text
+        print(f"DEBUG: Encontrado título '{title}', precio raw '{price}'")
+        
+        # Intentamos convertir a float:
+        price_num = float(price.replace("$", "").strip())
+        print(f"DEBUG: Precio numérico: {price_num}")
+        
+        if price_num <= price_max:
+            print(f"Titulo: {title}")
+            print(f"Precio: {price}")
+            print("-" * 40)
+        else:
+            print(f"DEBUG: Precio {price_num} mayor que límite {price_max}")
+            
+     except Exception as e:
+          print(f"Error extrayendo cuenta: {e}")
+          continue
 
-            if price_num <= price_max:
-                print(f"Titulo: {title}")
-                print(f"Precio: {price}")
-                print("-" * 40)
-        except Exception as e:
-            print("No se pudo extraer una cuenta")
-            continue
 
     driver.quit()
 
 
 if __name__ == "__main__":
-    # Ejemplo: buscar en Latinoamerica Sur, rango silver y precio máximo 5
-    obtain_prices_eldorado_sel(5, servidor="las", rango="silver")
+    # Ejemplo: buscar en NA, rango emerald y precio máximo 5
+    obtain_prices_eldorado_sel(5, servidor="na", rango="emerald")
