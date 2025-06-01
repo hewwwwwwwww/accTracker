@@ -334,12 +334,13 @@ def get_loot_info():
 
 
 
+
 # Mostrar resultados (fuera del for)
 
-    if champ_shards != 0:
-     print(f"🔹 Champion shards: {champ_shards}")
-    if skin_shards != 0:
-     print(f"🔸 Skin shards: {skin_shards}")
+   # if champ_shards != 0:
+   #  print(f"🔹 Champion shards: {champ_shards}")    Comentado ya que no muestra las skin shards porque no está hecho el metodo aca adentro
+  #  if skin_shards != 0:
+   #  print(f"🔸 Skin shards: {skin_shards}")
     if blue_essence > 499:
      print(f"🔵 Blue essence: {blue_essence}")
     if orange_essence > 499:
@@ -423,17 +424,117 @@ def get_skins_count():
    
     return (reconocidas)
 
+def get_champion_shards(): ##LISTA CHAMP Y SKIN SHARDS
+    lockfile = get_lockfile()
+    if not lockfile:
+        print("❌ No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
+        return
 
+    info = parse_lockfile(lockfile)
+   
 
-        
+    # Crear el token para Basic Auth
+    auth = base64.b64encode(f"riot:{info['password']}".encode()).decode()
 
+    headers = {
+        "Authorization": f"Basic {auth}"
+    }
+
+    # Deshabilitar warnings por certificado no verificado (porque es localhost y self-signed)
+    urllib3.disable_warnings()
+
+    url = f"https://127.0.0.1:{info['port']}/lol-loot/v1/player-loot"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except Exception as e:
+        print("❌ Error en la petición:", e)
+        return
+
+    if response.status_code != 200:
+        print(f"❌ Error al obtener botín: {response.status_code}")
+        return
+
+    loot = response.json()
+    
+
+    # Aquí podrías procesar loot para contar champion shards, skins, etc.
+    champ_shards = 0
+    skin_shards = 0
+
+    for item in loot:
+        loot_id = item.get('lootId', '')
+        count = item.get('count', 0)
+
+        if loot_id.startswith("CHAMPION_RENTAL"):
+            champ_shards += count
+        if item['type'] in ["SKIN", "SKIN_RENTAL", "CHAMPION_SKIN", "CHAMPION_SKIN_RENTAL"]:
+            skin_shards += item['count']
+
+    print(f"🔹 Champion shards: {champ_shards}")
+    print(f"🔸 Skin shards: {skin_shards}")
+
+    return loot
+def get_champion_skins_shards_list():
+    lockfile = get_lockfile()
+    if not lockfile:
+        print("❌ No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
+        return None, None
+
+    info = parse_lockfile(lockfile)
+    print("Lockfile info:", info)
+
+    # Crear el token para Basic Auth
+    auth = base64.b64encode(f"riot:{info['password']}".encode()).decode()
+
+    headers = {
+        "Authorization": f"Basic {auth}"
+    }
+
+    urllib3.disable_warnings()
+    url = f"https://127.0.0.1:{info['port']}/lol-loot/v1/player-loot"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except Exception as e:
+        print("❌ Error en la petición:", e)
+        return None, None
+
+    if response.status_code != 200:
+        print(f"❌ Error al obtener botín: {response.status_code}")
+        return None, None
+
+    loot = response.json()
+
+    champion_shards = []
+    skin_shards = []
+
+    for item in loot:
+        loot_id = item.get('lootId', '')
+        item_desc = item.get('itemDesc', '').strip()
+        count = item.get('count', 0)
+
+        if loot_id.startswith("CHAMPION_RENTAL") and count > 0:
+            champion_shards.append(item_desc)
+        elif loot_id.startswith("CHAMPION_SKIN_RENTAL") and count > 0:
+            skin_shards.append(item_desc)
+
+    # Crear los strings formateados
+    champ_str = f"Champions({len(champion_shards)}):\n" + ''.join(f"-{c}\n" for c in champion_shards)
+    skin_str = f"Skin Shards({len(skin_shards)}):\n" + ''.join(f"-{s}\n" for s in skin_shards)
+
+    return champ_str.strip(), skin_str.strip()
+
+#----------------------------------------------------------------------#
 if __name__ == "__main__":
     total_champions = get_current_summoner()
     total_skins = get_show_skins()
+    get_champion_shards()
     
-    
-    
-   
+
+
+
+
     
     
    
