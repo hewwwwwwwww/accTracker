@@ -520,7 +520,7 @@ def get_champion_skins_shards_list():
             skin_shards.append(item_desc)
 
     # Crear los strings formateados
-    champ_str = f"Champions Shards:({len(champion_shards)}):\n" + ''.join(f"-{c}\n" for c in champion_shards)   
+    champ_str = f"Champions Shards ({len(champion_shards)}):\n" + ''.join(f"-{c}\n" for c in champion_shards)   
     skin_str = f"Skin Shards :({len(skin_shards)}):\n" + ''.join(f"-{s}\n" for s in skin_shards)
 
     return champ_str.strip(), skin_str.strip() #falta usar este retorno para devolver los strings, guardarlos y copiarlos cuando sea
@@ -531,9 +531,13 @@ if __name__ == "__main__":
     total_skins = get_show_skins()
     champ_shard_list,skin_shard_list=get_champion_skins_shards_list()
     
-    print(champ_shard_list)
-    print("\n")
-    print(skin_shard_list)
+    if champ_shard_list.count("-") != 0:
+     print("\n")
+     print(champ_shard_list)
+     
+    if skin_shard_list.count("-") != 0:
+     print("\n")
+     print(skin_shard_list)
 
 
 
