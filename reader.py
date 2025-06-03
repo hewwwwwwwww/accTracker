@@ -482,7 +482,7 @@ def get_champion_skins_shards_list():
         return None, None
 
     info = parse_lockfile(lockfile)
-    print("Lockfile info:", info)
+    
 
     # Crear el token para Basic Auth
     auth = base64.b64encode(f"riot:{info['password']}".encode()).decode()
@@ -530,7 +530,9 @@ if __name__ == "__main__":
     total_champions = get_current_summoner()
     total_skins = get_show_skins()
     champ_shard_list,skin_shard_list=get_champion_skins_shards_list()
+    
     print(champ_shard_list)
+    print("\n")
     print(skin_shard_list)
 
 
