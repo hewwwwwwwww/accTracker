@@ -60,7 +60,7 @@ def get_prices_eldorado(server=None, rank=None):
     url = build_url(server_key=server, rank_key=rank)
     print(f"Navigating to URL: {url}")
     driver.get(url)
-    time.sleep(5)
+    # time.sleep(5)sleep comentado
 
     try:
         WebDriverWait(driver, 20).until(
