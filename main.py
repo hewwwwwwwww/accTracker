@@ -11,6 +11,7 @@ import time
 from clases.listing import Listing
 from diccionarios.servers import SERVERS_URLS
 from diccionarios.ranks import RANKS_URL
+import db_manager
 
 
 def server_url_by_key(server_key):
@@ -159,85 +160,43 @@ def send_discord_message(webhook_url, message):
 
 
 def process_accounts(server, rank, max_diff_percent, below_percent, discord_webhook_url):
-    """
-    Función que procesa cuentas de un servidor y rango específicos, filtra las cuentas viables
-    y envía un mensaje a Discord con la información de las cuentas filtradas.
-
-    :param server: Clave del servidor (ej. "na")
-    :param rank: Clave del rango (ej. "emerald")
-    :param max_diff_percent: Porcentaje máximo de diferencia para detener el guardado de publicaciones
-    :param below_percent: Porcentaje para definir las publicaciones válidas
-    :param discord_webhook_url: URL del webhook de Discord para enviar mensajes
-    """
     listings = get_prices_eldorado(server=server, rank=rank)
     viable_accounts = filter_viable_accounts(listings, max_diff_percent=max_diff_percent)
     filtered_accounts = filter_below_average(viable_accounts, below_percent=below_percent)
 
     for account in filtered_accounts:
-        message = (
-            f"Cuenta viable para control:\n"
-            f"Titulo: {account.title}\n"
-            f"Precio: ${account.price}\n"
-            f"Link: {account.url}"
-        )
-        send_discord_message(discord_webhook_url, message)
+        if not db_manager.account_exists(account.url):
+            message = (
+                f"Cuenta viable para control:\n"
+                f"Titulo: {account.title}\n"
+                f"Precio: ${account.price}\n"
+                f"Link: {account.url}"
+            )
+            send_discord_message(discord_webhook_url, message)
+            db_manager.add_account(account.url)
+
 
 
 if __name__ == "__main__":
+
+    db_manager.init_db()
+    
     DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1378220604058112081/F67MNaoZOF0R5Vxl6NlMmHCLUEm5fTKwBgvJkTEZjP2Lhima8IgSi96Bu_VSa4rsh4oz"
 
-    # Llamadas a la función process_accounts para diferentes servidores y rangos
-    process_accounts(server="na", rank="iron", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="na", rank="bronze", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="na", rank="emerald", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="na", rank="gold", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="na", rank="platinum", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="na", rank="emerald", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="na", rank="diamond+", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
+    # Defino listas de servidores y rangos para iterar
+    servers = ["na", "las", "lan", "euw", "eune", "br"]
+    ranks = ["iron", "bronze", "silver", "gold", "platinum", "emerald", "diamond+"]
 
-    
-    process_accounts(server="las", rank="unranked", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="las", rank="iron", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="las", rank="bronze", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="las", rank="silver", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="las", rank="gold", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="las", rank="platinum", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="las", rank="emerald", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="las", rank="diamond+", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
+    while True:
+        # Bucle que reemplaza todas las llamadas repetidas a process_accounts
+        for server in servers:
+            for rank in ranks:
+                # Llamada a process_accounts con cada combinación de servidor y rango
+                process_accounts(server=server, rank=rank, max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
 
-    
-    process_accounts(server="lan", rank="iron", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="lan", rank="bronze", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="lan", rank="silver", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="lan", rank="gold", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="lan", rank="platinum", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="lan", rank="emerald", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="lan", rank="diamond+", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
+        print("✅ Ciclo terminado. Esperando 30 minutos para el siguiente...\n")
 
-    
-    process_accounts(server="euw", rank="iron", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="euw", rank="bronze", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="euw", rank="silver", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="euw", rank="gold", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="euw", rank="platinum", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="euw", rank="emerald", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="euw", rank="diamond+", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-
-    
-    process_accounts(server="eune", rank="iron", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="eune", rank="bronze", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="eune", rank="silver", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="eune", rank="gold", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="eune", rank="platinum", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="eune", rank="emerald", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="eune", rank="diamond+", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-
-    
-    process_accounts(server="br", rank="iron", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="br", rank="bronze", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="br", rank="silver", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="br", rank="gold", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="br", rank="platinum", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="br", rank="emerald", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    process_accounts(server="br", rank="diamond+", max_diff_percent=35, below_percent=20, discord_webhook_url=DISCORD_WEBHOOK_URL)
-    # Puedes agregar más llamadas a process_accounts con diferentes parámetros según sea necesario
+        # Aquí podés poner el sleep que quieras, por ejemplo 30 minutos:
+        # time.sleep(60 * 30)
+        # Por ahora lo dejás comentado o con el valor que prefieras
+        time.sleep(60 * 0.1)  # Esto es 6 segundos, solo para prueba
