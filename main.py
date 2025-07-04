@@ -199,4 +199,4 @@ if __name__ == "__main__":
         # Aquí podés poner el sleep que quieras, por ejemplo 30 minutos:
         # time.sleep(60 * 30)
         # Por ahora lo dejás comentado o con el valor que prefieras
-        time.sleep(60 * 0.1)  # Esto es 6 segundos, solo para prueba
+        time.sleep(60 * 5)  # Esto es 6 segundos, solo para prueba
