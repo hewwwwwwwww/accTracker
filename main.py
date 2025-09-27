@@ -12,6 +12,7 @@ from clases.listing import Listing
 from diccionarios.servers import SERVERS_URLS
 from diccionarios.ranks import RANKS_URL
 import db_manager
+from utilidades.monedas.conversor import convertir_ars_a_usd, obtener_cotizacion
 
 
 def server_url_by_key(server_key):
@@ -83,19 +84,25 @@ def get_prices_eldorado(server=None, rank=None):
             title_element = offer.find_element(By.CLASS_NAME, "offer-title")
             price_element = offer.find_element(By.CLASS_NAME, "font-size-18")
             title = title_element.text
+
             price = price_element.text
+            # Limpieza del string de precio
+            price_clean = price.replace("ARS", "").replace("$", "").replace(",", "").strip()
+            cotizacion = obtener_cotizacion()
+            price_usd = convertir_ars_a_usd(float(price_clean), cotizacion)
+
             url = offer.get_attribute("href")
 
             print(f"Title found: '{title}'")
             print(f"Raw price: '{price}'")
             print(f"URL found: '{url}'")
+            print(f"Converted price to float: {price_clean}")
+            print(f"Precio en USD: ${price_usd:.2f}")
 
-            price_num = float(price.replace("$", "").strip())
-            print(f"Converted price to float: {price_num}")
-
-            listing = Listing(title, price_num)
+            listing = Listing(title, price_usd)
             listing.url = url  # agregamos el atributo url al objeto Listing
             listings.append(listing)
+
         except Exception as e:
             print(f"Error extracting account: {e}")
             continue
@@ -199,4 +206,4 @@ if __name__ == "__main__":
         # Aquí podés poner el sleep que quieras, por ejemplo 30 minutos:
         # time.sleep(60 * 30)
         # Por ahora lo dejás comentado o con el valor que prefieras
-        time.sleep(60 * 5)  # Esto es 6 segundos, solo para prueba
+        time.sleep(60 * 5)  # Esto es 5 minutos, solo para prueba
