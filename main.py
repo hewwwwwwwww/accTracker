@@ -1,4 +1,7 @@
 import requests
+import os
+from dotenv import load_dotenv
+load_dotenv()
 import re
 import statistics
 from selenium import webdriver
@@ -338,7 +341,9 @@ if __name__ == "__main__":
 
     db_manager.init_db()
 
-    DISCORD_WEBHOOK_URL = ""
+    DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
+
+    print('Discord webhook:', DISCORD_WEBHOOK_URL)
 
     servers = ["na"]
     ranks = ["iron", "bronze", "silver"]
