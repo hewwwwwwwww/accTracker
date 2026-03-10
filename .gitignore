@@ -396,3 +396,6 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Environment variables file (contains sensitive information, should not be committed to source control)
+.env
