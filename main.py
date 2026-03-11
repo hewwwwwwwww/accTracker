@@ -62,8 +62,33 @@ def build_url(server_key=None, rank_key=None):
 
 
 # ---------------------------------------
-# SCRAPER
+# HELPERS
 # ---------------------------------------
+
+def extract_sales(text):
+
+    match = re.search(r"\(([\d,]+)\)", text)
+
+    if match:
+        return int(match.group(1).replace(",", ""))
+
+    return 0
+
+
+def extract_skins(text):
+
+    match = re.search(r"(\d+)\s*Skins", text)
+
+    if match:
+        return int(match.group(1))
+
+    match_range = re.search(r"(\d+)-(\d+)\s*Skins", text)
+
+    if match_range:
+        return int(match_range.group(2))
+
+    return 0
+
 
 def extract_price_from_text(text):
 
@@ -74,6 +99,10 @@ def extract_price_from_text(text):
 
     return None
 
+
+# ---------------------------------------
+# SCRAPER
+# ---------------------------------------
 
 def get_prices_eldorado(driver, server=None, rank=None):
 
@@ -112,18 +141,27 @@ def get_prices_eldorado(driver, server=None, rank=None):
 
     cotizacion = obtener_cotizacion()
 
-    for i, offer in enumerate(offers):
+    for offer in offers:
 
         try:
 
-            print(f"\n--- Processing listing #{i+1} ---")
-
             full_text = offer.text
 
-            print("Element text preview:")
-            print(full_text[:200])
+            if len(full_text.strip()) < 20:
+                continue
 
-            title = full_text.split("\n")[0]
+            lines = full_text.split("\n")
+
+            if len(lines) < 7:
+                continue
+
+            title = lines[4]
+            seller = lines[5]
+            rating_line = lines[6]
+
+            sales = extract_sales(rating_line)
+
+            skins = extract_skins(full_text)
 
             price_text = None
 
@@ -142,11 +180,7 @@ def get_prices_eldorado(driver, server=None, rank=None):
                     price_text = "ARS" + extracted
 
             if not price_text:
-
-                print("Price not found. Skipping listing.")
                 continue
-
-            print(f"Raw price: {price_text}")
 
             price_clean = (
                 price_text
@@ -163,13 +197,13 @@ def get_prices_eldorado(driver, server=None, rank=None):
             listing = Listing(title, price_usd)
 
             listing.url = link
+            listing.seller = seller
+            listing.sales = sales
+            listing.skins = skins
 
             listings.append(listing)
 
-        except Exception as e:
-
-            print("Listing parse error:", e)
-
+        except Exception:
             continue
 
     print(f"\nValid listings obtained: {len(listings)}")
@@ -178,24 +212,22 @@ def get_prices_eldorado(driver, server=None, rank=None):
 
 
 # ---------------------------------------
-# NUEVO: ELIMINAR DUPLICADOS
+# DUPLICATES
 # ---------------------------------------
 
 def remove_duplicates(listings):
 
     seen = set()
-
     unique = []
 
     for listing in listings:
 
-        signature = f"{listing.title}_{listing.price}"
+        signature = listing.url
 
         if signature in seen:
             continue
 
         seen.add(signature)
-
         unique.append(listing)
 
     print(f"Listings after duplicate removal: {len(unique)}")
@@ -204,57 +236,10 @@ def remove_duplicates(listings):
 
 
 # ---------------------------------------
-# FILTROS
+# OPPORTUNITY DETECTION
 # ---------------------------------------
 
-def filter_viable_accounts(listings, max_diff_percent):
-
-    if len(listings) < 2:
-        return listings
-
-    viable_accounts = [listings[0]]
-
-    base_price = listings[0].price
-
-    for listing in listings[1:]:
-
-        current_diff = ((listing.price - base_price) / base_price) * 100
-
-        if current_diff > max_diff_percent:
-
-            print(f"\nLimit of {max_diff_percent}% reached")
-
-            break
-
-        viable_accounts.append(listing)
-
-    return viable_accounts
-
-
-def filter_below_average(viable_accounts, below_percent):
-
-    if not viable_accounts:
-        return []
-
-    avg_price = sum(acc.price for acc in viable_accounts) / len(viable_accounts)
-
-    threshold = avg_price * (1 - below_percent / 100)
-
-    filtered_accounts = [
-        acc for acc in viable_accounts
-        if acc.price <= threshold
-    ]
-
-    print(f"\nAverage price: ${avg_price:.2f}")
-
-    return filtered_accounts
-
-
-# ---------------------------------------
-# NUEVO: DETECTAR SNIPES
-# ---------------------------------------
-
-def detect_snipes(listings):
+def detect_opportunities(listings):
 
     if len(listings) < 3:
         return []
@@ -263,18 +248,40 @@ def detect_snipes(listings):
 
     avg = statistics.mean(prices)
 
-    snipes = []
+    opportunities = []
+
+    print("\nMarket scan:")
 
     for listing in listings:
 
-        if listing.price <= avg * 0.7:
+        print(
+            f"${listing.price:.2f} | {listing.skins} skins | "
+            f"{listing.seller} ({listing.sales} sales)"
+        )
 
-            print("\n🚨 SNIPER DETECTADO 🚨")
-            print(listing.title, listing.price)
+        reasons = []
 
-            snipes.append(listing)
+        if listing.price < avg * 0.6:
+            reasons.append("🔥 MUY BARATA")
 
-    return snipes
+        if listing.sales < 50:
+            reasons.append("🆕 VENDEDOR NUEVO")
+
+        if listing.sales < 500:
+            reasons.append("📉 VENDEDOR PEQUEÑO")
+
+        if listing.skins > 40 and listing.price < avg:
+            reasons.append("🎁 MUCHAS SKINS BARATO")
+
+        if reasons:
+
+            print("OPPORTUNITY →", " | ".join(reasons))
+
+            listing.reasons = reasons
+
+            opportunities.append(listing)
+
+    return opportunities
 
 
 # ---------------------------------------
@@ -284,7 +291,7 @@ def detect_snipes(listings):
 def send_discord_message(webhook_url, message):
 
     if not webhook_url or "http" not in webhook_url:
-        print("Discord webhook not configured. Skipping message.")
+        print("Discord webhook not configured.")
         return
 
     try:
@@ -292,9 +299,7 @@ def send_discord_message(webhook_url, message):
         response = requests.post(webhook_url, json={"content": message})
 
         if response.status_code == 204:
-            print("Mensaje enviado correctamente a Discord.")
-        else:
-            print("Discord response:", response.status_code, response.text)
+            print("Mensaje enviado a Discord")
 
     except Exception as e:
 
@@ -305,32 +310,33 @@ def send_discord_message(webhook_url, message):
 # PROCESS
 # ---------------------------------------
 
-def process_accounts(driver, server, rank, max_diff_percent, below_percent, discord_webhook_url):
+def process_accounts(driver, server, rank, discord_webhook_url):
 
     listings = get_prices_eldorado(driver, server, rank)
 
     listings = remove_duplicates(listings)
 
-    viable_accounts = filter_viable_accounts(listings, max_diff_percent)
+    opportunities = detect_opportunities(listings)
 
-    filtered_accounts = filter_below_average(viable_accounts, below_percent)
+    for acc in opportunities:
 
-    snipes = detect_snipes(listings)
+        if not db_manager.account_exists(acc.url):
 
-    for account in filtered_accounts + snipes:
-
-        if not db_manager.account_exists(account.url):
+            reasons = " | ".join(acc.reasons)
 
             message = (
-                f"Cuenta detectada:\n"
-                f"Titulo: {account.title}\n"
-                f"Precio: ${account.price:.2f}\n"
-                f"Link: {account.url}"
+                f"🚨 OPORTUNIDAD DETECTADA 🚨\n\n"
+                f"{reasons}\n\n"
+                f"Titulo: {acc.title}\n"
+                f"Seller: {acc.seller} ({acc.sales} ventas)\n"
+                f"Skins: {acc.skins}\n"
+                f"Precio: ${acc.price:.2f}\n"
+                f"{acc.url}"
             )
 
             send_discord_message(discord_webhook_url, message)
 
-            db_manager.add_account(account.url)
+            db_manager.add_account(acc.url)
 
 
 # ---------------------------------------
@@ -342,8 +348,6 @@ if __name__ == "__main__":
     db_manager.init_db()
 
     DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
-
-    print('Discord webhook:', DISCORD_WEBHOOK_URL)
 
     servers = ["na"]
     ranks = ["iron", "bronze", "silver"]
@@ -369,8 +373,6 @@ if __name__ == "__main__":
                         driver,
                         server,
                         rank,
-                        35,
-                        20,
                         DISCORD_WEBHOOK_URL
                     )
 
@@ -380,6 +382,6 @@ if __name__ == "__main__":
 
                 time.sleep(10)
 
-        print("Ciclo terminado. Esperando 10 minutos.")
+        print("\nCiclo terminado. Esperando 10 minutos.")
 
         time.sleep(600)
