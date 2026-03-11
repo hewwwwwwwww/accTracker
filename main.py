@@ -52,15 +52,12 @@ def build_url(server_key=None, rank_key=None):
 
 def extract_sales(text):
     text = text.lower()
-    match = re.search(r"\(([\d,.k]+)\)", text)
+    match = re.search(r"\(?([\d,.k]+)\)?\s*sales?", text)
     if match:
         val = match.group(1).replace(",", "")
         if "k" in val:
             return int(float(val.replace("k",""))*1000)
         return int(val)
-    match_alt = re.search(r"(\d+)\s*sales", text)
-    if match_alt:
-        return int(match_alt.group(1))
     return 0
 
 def extract_skins(text):
@@ -101,26 +98,23 @@ def get_prices_eldorado(driver, server=None, rank=None):
     except Exception as e:
         print("Failed to load account list", e)
         return []
+
     print(f"Listings detected: {len(offers)}")
     listings = []
     cotizacion = obtener_cotizacion()
+
     for offer in offers:
         try:
-            full_text = offer.text
-            if len(full_text.strip()) < 20:
+            full_text = offer.text.strip()
+            if len(full_text) < 10:
+                print(f"[SKIP] Listing muy corto: {full_text[:50]}...")
                 continue
-            lines = full_text.split("\n")
-            if len(lines) < 7:
-                continue
-            title = lines[4]
-            seller = lines[5]
-            rating_line = lines[6]
-            sales = extract_sales(rating_line)
-            skins = extract_skins(full_text)
+
+            # PRICE
             price_text = None
             spans = offer.find_elements(By.TAG_NAME, "span")
             for s in spans:
-                if "ARS" in s.text or "$" in s.text:
+                if "$" in s.text or "ARS" in s.text:
                     price_text = s.text
                     break
             if not price_text:
@@ -128,9 +122,26 @@ def get_prices_eldorado(driver, server=None, rank=None):
                 if extracted:
                     price_text = "ARS" + extracted
             if not price_text:
+                print(f"[SKIP] Precio no encontrado: {full_text[:50]}...")
                 continue
             price_clean = price_text.replace("ARS","").replace("$","").replace(",","").strip()
             price_usd = convertir_ars_a_usd(float(price_clean), cotizacion)
+
+            # SALES
+            sales = extract_sales(full_text)
+
+            # SKINS
+            skins = extract_skins(full_text)
+
+            # SELLER & TITLE (flexible)
+            lines = full_text.split("\n")
+            seller = next((l for l in lines if "sales" in l.lower()), None)
+            if seller:
+                seller = seller.split("(")[0].strip()
+            else:
+                seller = lines[-1].strip()
+            title = lines[0].strip() if len(lines)>0 else "League Account"
+
             link = offer.get_attribute("href")
             listing = Listing(title, price_usd)
             listing.url = link
@@ -138,8 +149,10 @@ def get_prices_eldorado(driver, server=None, rank=None):
             listing.sales = sales
             listing.skins = skins
             listings.append(listing)
+
         except Exception:
             continue
+
     print(f"\nValid listings obtained: {len(listings)}")
     return listings
 
@@ -166,37 +179,48 @@ def remove_duplicates(listings):
 def detect_opportunities(listings):
     if len(listings) < 3:
         return []
+
     prices = [l.price for l in listings]
     avg = statistics.mean(prices)
     opportunities = []
+
     seen_sellers = set()
     seen_listings = set()
+
     print("\nMarket scan:")
     for listing in listings:
         listing_hash = f"{listing.seller}_{listing.title}_{listing.price}"
         if listing_hash in seen_listings:
             continue
         seen_listings.add(listing_hash)
+
         repeated_seller = listing.seller in seen_sellers
         seen_sellers.add(listing.seller)
+
+        # ----------------
         # SNIPER SCORE
+        # ----------------
         score = 0
-        if listing.price < avg*0.6: score +=4
-        elif listing.price < avg*0.8: score +=2
-        if listing.skins > 80: score +=3
-        elif listing.skins > 40: score +=1
+        if listing.price < avg*0.6: score +=5
+        elif listing.price < avg*0.8: score +=3
+        if listing.skins > 80: score +=4
+        elif listing.skins > 40: score +=2
         if listing.sales < 5: score +=3
         elif listing.sales < 500: score +=1
         if repeated_seller: score -=2
+
         listing.score = score
+
         print(f"Score {score} | ${listing.price:.2f} | {listing.skins} skins | {listing.seller} ({listing.sales} sales)")
-        if score >=6:
+
+        if score >= 6:
             listing.reasons = []
             if listing.price < avg*0.6: listing.reasons.append("🔥 MUY BARATA")
             if listing.skins > 40: listing.reasons.append("🎁 MUCHAS SKINS")
             if listing.sales < 50: listing.reasons.append("🆕 VENDEDOR NUEVO")
             if listing.sales < 500: listing.reasons.append("📉 VENDEDOR PEQUEÑO")
             opportunities.append(listing)
+
     return opportunities
 
 # -------------------
@@ -251,6 +275,7 @@ if __name__ == "__main__":
     edge_driver_path = 'C:/drivers/msedgedriver.exe'
     service = Service(executable_path=edge_driver_path)
     driver = webdriver.Edge(service=service, options=options)
+
     while True:
         for server in servers:
             for rank in ranks:
