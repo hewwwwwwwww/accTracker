@@ -18,9 +18,9 @@ from diccionarios.ranks import RANKS_URL
 import db_manager
 from utilidades.monedas.conversor import convertir_ars_a_usd, obtener_cotizacion
 
-# -------------------
+# ---------------------------------------
 # URL BUILDING
-# -------------------
+# ---------------------------------------
 
 def server_url_by_key(server_key):
     return SERVERS_URLS.get(server_key, "")
@@ -43,28 +43,30 @@ def build_url(server_key=None, rank_key=None):
         parts.append(server_url.split('?')[1])
     if rank_url:
         parts.append(rank_url.split('?')[1])
-    url = base_url + ("?" + "&".join(parts) if parts else "")
+    if parts:
+        url = base_url + "?" + "&".join(parts)
+    else:
+        url = base_url
     return add_price_sorting_to_url(url)
 
-# -------------------
+# ---------------------------------------
 # HELPERS
-# -------------------
+# ---------------------------------------
 
 def extract_sales(text):
-    text = text.lower()
-    match = re.search(r"\(?([\d,.k]+)\)?\s*sales?", text)
+    match = re.search(r"\(?(\d{1,5})\)?", text.replace(",", ""))
     if match:
-        val = match.group(1).replace(",", "")
-        if "k" in val:
-            return int(float(val.replace("k",""))*1000)
-        return int(val)
+        return int(match.group(1))
     return 0
 
 def extract_skins(text):
-    match = re.search(r"(\d+)\s*Skins", text)
+    match = re.search(r"(\d+)\s*skins?", text, re.IGNORECASE)
     if match:
         return int(match.group(1))
-    match_range = re.search(r"(\d+)-(\d+)\s*Skins", text)
+    match2 = re.search(r"skins?\s*[:\-]?\s*(\d+)", text, re.IGNORECASE)
+    if match2:
+        return int(match2.group(1))
+    match_range = re.search(r"(\d+)-(\d+)\s*skins?", text, re.IGNORECASE)
     if match_range:
         return int(match_range.group(2))
     return 0
@@ -75,15 +77,16 @@ def extract_price_from_text(text):
         return match.group(1)
     return None
 
-# -------------------
+# ---------------------------------------
 # SCRAPER
-# -------------------
+# ---------------------------------------
 
 def get_prices_eldorado(driver, server=None, rank=None):
     print("\nStarting scraping...")
     url = build_url(server_key=server, rank_key=rank)
     print(f"Navigating to URL: {url}")
     driver.get(url)
+
     try:
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located(
@@ -91,74 +94,91 @@ def get_prices_eldorado(driver, server=None, rank=None):
             )
         )
         time.sleep(2)
-        offers = driver.find_elements(
-            By.CSS_SELECTOR,
-            "a[href*='league-of-legends-account']"
-        )
+        offers = driver.find_elements(By.CSS_SELECTOR, "a[href*='league-of-legends-account']")
     except Exception as e:
         print("Failed to load account list", e)
         return []
 
     print(f"Listings detected: {len(offers)}")
+
     listings = []
     cotizacion = obtener_cotizacion()
 
     for offer in offers:
         try:
-            full_text = offer.text.strip()
-            if len(full_text) < 10:
-                print(f"[SKIP] Listing muy corto: {full_text[:50]}...")
+            full_text = offer.text
+            if len(full_text.strip()) < 20:
+                print(f"[SKIP] Listing muy corto: {full_text[:30]}...")
                 continue
 
-            # PRICE
+            # DEBUG: print RAW listing
+            print("\nRAW LISTING TEXT:\n", full_text, "\n")
+
+            lines = full_text.split("\n")
+            title = seller = rank_name = None
+            sales = 0
+            skins = extract_skins(full_text)
             price_text = None
+
+            # Intentamos parser flexible según layout Eldorado
+            if len(lines) >= 7:
+                rank_name = lines[2]
+                title = lines[4]
+                seller = lines[5]
+                sales = extract_sales(lines[6])
+            elif len(lines) >= 5:
+                title = lines[0]
+                seller = lines[1]
+                rank_name = lines[2] if len(lines) > 2 else "Unknown"
+            else:
+                title = lines[0] if lines else "Unknown"
+                seller = "Unknown"
+                rank_name = "Unknown"
+
+            # Precio
             spans = offer.find_elements(By.TAG_NAME, "span")
             for s in spans:
-                if "$" in s.text or "ARS" in s.text:
+                if "ARS" in s.text or "$" in s.text:
                     price_text = s.text
                     break
+
             if not price_text:
                 extracted = extract_price_from_text(full_text)
                 if extracted:
                     price_text = "ARS" + extracted
+
             if not price_text:
-                print(f"[SKIP] Precio no encontrado: {full_text[:50]}...")
+                print(f"[SKIP] Sin precio detectado: {full_text[:30]}...")
                 continue
-            price_clean = price_text.replace("ARS","").replace("$","").replace(",","").strip()
+
+            price_clean = (
+                price_text.replace("ARS", "").replace("$", "").replace(",", "").strip()
+            )
             price_usd = convertir_ars_a_usd(float(price_clean), cotizacion)
-
-            # SALES
-            sales = extract_sales(full_text)
-
-            # SKINS
-            skins = extract_skins(full_text)
-
-            # SELLER & TITLE (flexible)
-            lines = full_text.split("\n")
-            seller = next((l for l in lines if "sales" in l.lower()), None)
-            if seller:
-                seller = seller.split("(")[0].strip()
-            else:
-                seller = lines[-1].strip()
-            title = lines[0].strip() if len(lines)>0 else "League Account"
-
             link = offer.get_attribute("href")
+
             listing = Listing(title, price_usd)
             listing.url = link
             listing.seller = seller
             listing.sales = sales
             listing.skins = skins
+            listing.rank = rank_name
+
+            # price per skin
+            listing.pps = price_usd / skins if skins > 0 else price_usd
+
             listings.append(listing)
 
-        except Exception:
+        except Exception as e:
+            print("[ERROR PARSING LISTING]:", e)
             continue
 
     print(f"\nValid listings obtained: {len(listings)}")
     return listings
 
-# -------------------
+# ---------------------------------------
 # DUPLICATES
-# -------------------
+# ---------------------------------------
 
 def remove_duplicates(listings):
     seen = set()
@@ -172,9 +192,9 @@ def remove_duplicates(listings):
     print(f"Listings after duplicate removal: {len(unique)}")
     return unique
 
-# -------------------
+# ---------------------------------------
 # OPPORTUNITY DETECTION
-# -------------------
+# ---------------------------------------
 
 def detect_opportunities(listings):
     if len(listings) < 3:
@@ -184,48 +204,45 @@ def detect_opportunities(listings):
     avg = statistics.mean(prices)
     opportunities = []
 
-    seen_sellers = set()
-    seen_listings = set()
-
     print("\nMarket scan:")
+
     for listing in listings:
-        listing_hash = f"{listing.seller}_{listing.title}_{listing.price}"
-        if listing_hash in seen_listings:
-            continue
-        seen_listings.add(listing_hash)
-
-        repeated_seller = listing.seller in seen_sellers
-        seen_sellers.add(listing.seller)
-
-        # ----------------
-        # SNIPER SCORE
-        # ----------------
         score = 0
-        if listing.price < avg*0.6: score +=5
-        elif listing.price < avg*0.8: score +=3
-        if listing.skins > 80: score +=4
-        elif listing.skins > 40: score +=2
-        if listing.sales < 5: score +=3
-        elif listing.sales < 500: score +=1
-        if repeated_seller: score -=2
+        reasons = []
+
+        if listing.price < avg * 0.6:
+            score += 5
+            reasons.append("🔥 MUY BARATA")
+        if listing.sales < 50:
+            score += 3
+            reasons.append("🆕 VENDEDOR NUEVO")
+        elif listing.sales < 500:
+            score += 1
+            reasons.append("📉 VENDEDOR PEQUEÑO")
+        if listing.skins > 40 and listing.price < avg:
+            score += 2
+            reasons.append("🎁 MUCHAS SKINS BARATO")
+        if listing.pps < 1.0:
+            score += 1
+            reasons.append("💰 PPS BARATO")
 
         listing.score = score
+        listing.reasons = reasons
 
-        print(f"Score {score} | ${listing.price:.2f} | {listing.skins} skins | {listing.seller} ({listing.sales} sales)")
+        print(
+            f"Score {score} | ${listing.price:.2f} | {listing.rank} | "
+            f"{listing.skins} skins | pps:{listing.pps:.2f} | {listing.seller} ({listing.sales})"
+        )
+        print(listing.url)
 
-        if score >= 6:
-            listing.reasons = []
-            if listing.price < avg*0.6: listing.reasons.append("🔥 MUY BARATA")
-            if listing.skins > 40: listing.reasons.append("🎁 MUCHAS SKINS")
-            if listing.sales < 50: listing.reasons.append("🆕 VENDEDOR NUEVO")
-            if listing.sales < 500: listing.reasons.append("📉 VENDEDOR PEQUEÑO")
+        if reasons:
             opportunities.append(listing)
 
     return opportunities
 
-# -------------------
+# ---------------------------------------
 # DISCORD
-# -------------------
+# ---------------------------------------
 
 def send_discord_message(webhook_url, message):
     if not webhook_url or "http" not in webhook_url:
@@ -238,14 +255,15 @@ def send_discord_message(webhook_url, message):
     except Exception as e:
         print("Discord error:", e)
 
-# -------------------
+# ---------------------------------------
 # PROCESS
-# -------------------
+# ---------------------------------------
 
 def process_accounts(driver, server, rank, discord_webhook_url):
     listings = get_prices_eldorado(driver, server, rank)
     listings = remove_duplicates(listings)
     opportunities = detect_opportunities(listings)
+
     for acc in opportunities:
         if not db_manager.account_exists(acc.url):
             reasons = " | ".join(acc.reasons)
@@ -254,22 +272,24 @@ def process_accounts(driver, server, rank, discord_webhook_url):
                 f"{reasons}\n\n"
                 f"Titulo: {acc.title}\n"
                 f"Seller: {acc.seller} ({acc.sales} ventas)\n"
+                f"Rank: {acc.rank}\n"
                 f"Skins: {acc.skins}\n"
-                f"Precio: ${acc.price:.2f}\n"
+                f"Precio: ${acc.price:.2f} | pps:{acc.pps:.2f}\n"
                 f"{acc.url}"
             )
             send_discord_message(discord_webhook_url, message)
             db_manager.add_account(acc.url)
 
-# -------------------
+# ---------------------------------------
 # MAIN
-# -------------------
+# ---------------------------------------
 
 if __name__ == "__main__":
     db_manager.init_db()
     DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
     servers = ["na"]
     ranks = ["iron", "bronze", "silver"]
+
     options = Options()
     options.add_argument("--disable-blink-features=AutomationControlled")
     edge_driver_path = 'C:/drivers/msedgedriver.exe'
