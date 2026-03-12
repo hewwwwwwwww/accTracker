@@ -14,9 +14,6 @@ from diccionarios.servers import SERVERS_URLS
 from diccionarios.ranks import RANKS_URL
 
 
-market_lows = {}
-
-
 # -----------------------------
 # URL BUILDER
 # -----------------------------
@@ -40,15 +37,24 @@ def build_url(server_key=None, rank_key=None):
 
 
 # -----------------------------
-# PRICE PARSER
+# PRICE PARSER (ROBUST)
 # -----------------------------
 
 def extract_price(text):
 
-    match = re.search(r"ARS\s?([\d,]+\.\d+)", text)
+    patterns = [
+        r"ARS\s?([\d,]+\.\d+)",
+        r"USD\s?([\d,]+\.\d+)",
+        r"US\$\s?([\d,]+\.\d+)",
+        r"\$([\d,]+\.\d+)"
+    ]
 
-    if match:
-        return float(match.group(1).replace(",", ""))
+    for p in patterns:
+
+        match = re.search(p, text)
+
+        if match:
+            return float(match.group(1).replace(",", ""))
 
     return None
 
@@ -100,12 +106,16 @@ def scrape_listings(driver, server, rank):
             if len(lines) >= 3:
                 rank_name = lines[2]
 
-            price_ars = extract_price(text)
+            price = extract_price(text)
 
-            if not price_ars:
+            if not price:
                 continue
 
-            price_usd = convertir_ars_a_usd(price_ars, cotizacion)
+            # si viene en ARS lo convertimos
+            if "ARS" in text:
+                price_usd = convertir_ars_a_usd(price, cotizacion)
+            else:
+                price_usd = price
 
             url = offer.get_attribute("href")
 
@@ -145,53 +155,66 @@ def remove_duplicates(listings):
 
 
 # -----------------------------
-# MARKET LOW DETECTOR
+# MARKET ANALYSIS (SMART SCAN)
 # -----------------------------
 
-def check_market_lows(listings):
+def analyze_market(listings):
 
-    global market_lows
+    if not listings:
+        print("No listings to analyze.")
+        return
+
+    listings = sorted(listings, key=lambda x: x["price"])
+
+    scanned = []
+    prices = []
 
     for l in listings:
 
-        rank = l["rank"]
         price = l["price"]
 
-        if rank not in market_lows:
+        if prices:
 
-            market_lows[rank] = price
-            continue
+            avg = sum(prices) / len(prices)
 
-        if price < market_lows[rank]:
+            # CORTE si el precio se dispara
+            if price > avg * 1.45:
+                print("\nMarket range exceeded. Stopping scan.")
+                break
 
-            print("\n🔥 NEW MARKET LOW DETECTED")
+        scanned.append(l)
+        prices.append(price)
 
-            print(
-                f"{l['server']} - {rank} - ${price:.2f}"
-            )
+    if not scanned:
+        return
 
-            print(
-                f"Previous low: ${market_lows[rank]:.2f}"
-            )
+    avg_price = sum(prices) / len(prices)
 
-            print(l["url"])
+    print("\n--- MARKET DEBUG ---")
 
-            market_lows[rank] = price
-
-
-# -----------------------------
-# OUTPUT
-# -----------------------------
-
-def print_listings(listings):
-
-    for l in listings:
+    for l in scanned:
 
         print(
-            f"{l['server']} - {l['rank']} - ${l['price']:.2f}"
+            f"{l['server']} | {l['rank']} | ${l['price']:.2f}"
         )
 
         print(l["url"])
+
+    print("\nAverage price:", round(avg_price, 2))
+
+    first = scanned[0]
+
+    if first["price"] < avg_price * 0.55:
+
+        print("\n🚨 OPPORTUNITY DETECTED")
+
+        print(
+            f"{first['server']} | {first['rank']} | ${first['price']:.2f}"
+        )
+
+        print("Market average:", round(avg_price, 2))
+
+        print(first["url"])
 
 
 # -----------------------------
@@ -240,9 +263,7 @@ if __name__ == "__main__":
 
         print("\nListings found:", len(all_listings))
 
-        check_market_lows(all_listings)
-
-        print_listings(all_listings)
+        analyze_market(all_listings)
 
         print("\nCycle finished. Waiting 10 minutes.")
 
