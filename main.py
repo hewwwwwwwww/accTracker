@@ -1,4 +1,3 @@
-import os
 import time
 import re
 
@@ -10,30 +9,51 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from utilidades.monedas.conversor import convertir_ars_a_usd, obtener_cotizacion
-from diccionarios.servers import SERVERS_URLS
-from diccionarios.ranks import RANKS_URL
 
 
 # -----------------------------
-# URL BUILDER
+# TARGET URLS
 # -----------------------------
 
-def build_url(server_key=None, rank_key=None):
+TARGET_URLS = {
 
-    base_url = "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0"
+    # -------- LAN --------
 
-    params = []
+    ("LAN", "unranked"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20North&lol-current-rank=unranked&sortBy=price&sortOrder=asc",
 
-    if server_key and server_key in SERVERS_URLS:
-        params.append(SERVERS_URLS[server_key].split("?")[1])
+    ("LAN", "iron"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20North&lol-current-rank=iron&sortBy=price&sortOrder=asc",
 
-    if rank_key and rank_key in RANKS_URL:
-        params.append(RANKS_URL[rank_key].split("?")[1])
+    ("LAN", "bronze"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20North&lol-current-rank=bronze&sortBy=price&sortOrder=asc",
 
-    params.append("offerSortingCriterion=Price")
-    params.append("isAscending=true")
+    ("LAN", "silver"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20North&lol-current-rank=silver&sortBy=price&sortOrder=asc",
 
-    return base_url + "?" + "&".join(params)
+    ("LAN", "gold"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20North&lol-current-rank=gold&sortBy=price&sortOrder=asc",
+
+    ("LAN", "platinum"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20North&lol-current-rank=platinum&sortBy=price&sortOrder=asc",
+
+    ("LAN", "diamond"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20North&lol-current-rank=diamond&sortBy=price&sortOrder=asc",
+
+    ("LAN", "emerald"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20North&lol-current-rank=emerald&sortBy=price&sortOrder=asc",
+
+
+    # -------- LAS --------
+
+    ("LAS", "unranked"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20South&lol-current-rank=unranked&sortBy=price&sortOrder=asc",
+
+    ("LAS", "iron"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20South&lol-current-rank=iron&sortBy=price&sortOrder=asc",
+
+    ("LAS", "bronze"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20South&lol-current-rank=bronze&sortBy=price&sortOrder=asc",
+
+    ("LAS", "silver"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20South&lol-current-rank=silver&sortBy=price&sortOrder=asc",
+
+    ("LAS", "gold"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20South&lol-current-rank=gold&sortBy=price&sortOrder=asc",
+
+    ("LAS", "platinum"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20South&lol-current-rank=platinum&sortBy=price&sortOrder=asc",
+
+    ("LAS", "diamond"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20South&lol-current-rank=diamond&sortBy=price&sortOrder=asc",
+
+    ("LAS", "emerald"): "https://www.eldorado.gg/league-of-legends-accounts-for-sale/a/17-1-0?pageSize=24&te_v0=Latin%20America%20South&lol-current-rank=emerald&sortBy=price&sortOrder=asc"
+}
 
 
 # -----------------------------
@@ -63,11 +83,10 @@ def extract_price(text):
 # SCRAPER
 # -----------------------------
 
-def scrape_listings(driver, server, rank):
+def scrape_listings(driver, server, rank, url):
 
-    url = build_url(server, rank)
-
-    print(f"\nNavigating to {url}")
+    print(f"\nNavigating to {server} | {rank.upper()} market")
+    print(url)
 
     driver.get(url)
 
@@ -99,13 +118,6 @@ def scrape_listings(driver, server, rank):
             if len(text) < 20:
                 continue
 
-            lines = text.split("\n")
-
-            rank_name = "Unknown"
-
-            if len(lines) >= 3:
-                rank_name = lines[2]
-
             price, pattern = extract_price(text)
 
             if not price:
@@ -116,13 +128,13 @@ def scrape_listings(driver, server, rank):
             else:
                 price_usd = price
 
-            url = offer.get_attribute("href")
+            listing_url = offer.get_attribute("href")
 
             listings.append({
-                "server": server.upper(),
-                "rank": rank_name,
+                "server": server,
+                "rank": rank,
                 "price": price_usd,
-                "url": url
+                "url": listing_url
             })
 
         except Exception:
@@ -152,30 +164,10 @@ def remove_duplicates(listings):
 
 
 # -----------------------------
-# GROUP BY RANK
-# -----------------------------
-
-def group_by_rank(listings):
-
-    grouped = {}
-
-    for l in listings:
-
-        rank = l["rank"]
-
-        if rank not in grouped:
-            grouped[rank] = []
-
-        grouped[rank].append(l)
-
-    return grouped
-
-
-# -----------------------------
 # MARKET ANALYSIS
 # -----------------------------
 
-def analyze_market(rank, listings):
+def analyze_market(server, rank, listings):
 
     if not listings:
         return
@@ -194,6 +186,7 @@ def analyze_market(rank, listings):
             avg = sum(prices) / len(prices)
 
             if price > avg * 1.45:
+
                 print("\nMarket range exceeded. Stopping scan.")
                 break
 
@@ -205,14 +198,11 @@ def analyze_market(rank, listings):
 
     avg_price = sum(prices) / len(prices)
 
-    print(f"\n--- MARKET DEBUG ({rank}) ---")
+    print(f"\n--- MARKET DEBUG ({server} {rank.upper()}) ---")
 
     for l in scanned:
 
-        print(
-            f"{l['server']} | {rank} | ${l['price']:.2f}"
-        )
-
+        print(f"{server} | {rank} | ${l['price']:.2f}")
         print(l["url"])
 
     print("\nAverage price:", round(avg_price, 2))
@@ -223,12 +213,8 @@ def analyze_market(rank, listings):
 
         print("\n🚨 OPPORTUNITY DETECTED")
 
-        print(
-            f"{first['server']} | {rank} | ${first['price']:.2f}"
-        )
-
+        print(f"{server} | {rank} | ${first['price']:.2f}")
         print("Market average:", round(avg_price, 2))
-
         print(first["url"])
 
 
@@ -238,16 +224,7 @@ def analyze_market(rank, listings):
 
 if __name__ == "__main__":
 
-    servers = ["na"]
-
-    ranks = [
-        "iron",
-        "bronze",
-        "silver"
-    ]
-
     options = Options()
-
     options.add_argument("--disable-blink-features=AutomationControlled")
 
     service = Service("C:/drivers/msedgedriver.exe")
@@ -256,32 +233,21 @@ if __name__ == "__main__":
 
     while True:
 
-        all_listings = []
+        for (server, rank), url in TARGET_URLS.items():
 
-        for server in servers:
+            try:
 
-            for rank in ranks:
+                listings = scrape_listings(driver, server, rank, url)
 
-                try:
+                listings = remove_duplicates(listings)
 
-                    listings = scrape_listings(driver, server, rank)
-                    all_listings.extend(listings)
+                analyze_market(server, rank, listings)
 
-                except Exception as e:
+            except Exception as e:
 
-                    print("Error:", e)
+                print("Error:", e)
 
-                time.sleep(5)
-
-        all_listings = remove_duplicates(all_listings)
-
-        print("\nListings found:", len(all_listings))
-
-        grouped = group_by_rank(all_listings)
-
-        for rank, listings in grouped.items():
-
-            analyze_market(rank, listings)
+            time.sleep(5)
 
         print("\nCycle finished. Waiting 10 minutes.")
 
