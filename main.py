@@ -14,6 +14,9 @@ from diccionarios.servers import SERVERS_URLS
 from diccionarios.ranks import RANKS_URL
 
 
+market_lows = {}
+
+
 # -----------------------------
 # URL BUILDER
 # -----------------------------
@@ -142,6 +145,41 @@ def remove_duplicates(listings):
 
 
 # -----------------------------
+# MARKET LOW DETECTOR
+# -----------------------------
+
+def check_market_lows(listings):
+
+    global market_lows
+
+    for l in listings:
+
+        rank = l["rank"]
+        price = l["price"]
+
+        if rank not in market_lows:
+
+            market_lows[rank] = price
+            continue
+
+        if price < market_lows[rank]:
+
+            print("\n🔥 NEW MARKET LOW DETECTED")
+
+            print(
+                f"{l['server']} - {rank} - ${price:.2f}"
+            )
+
+            print(
+                f"Previous low: ${market_lows[rank]:.2f}"
+            )
+
+            print(l["url"])
+
+            market_lows[rank] = price
+
+
+# -----------------------------
 # OUTPUT
 # -----------------------------
 
@@ -201,6 +239,8 @@ if __name__ == "__main__":
         all_listings = remove_duplicates(all_listings)
 
         print("\nListings found:", len(all_listings))
+
+        check_market_lows(all_listings)
 
         print_listings(all_listings)
 
