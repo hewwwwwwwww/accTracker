@@ -37,7 +37,7 @@ def build_url(server_key=None, rank_key=None):
 
 
 # -----------------------------
-# PRICE PARSER (ROBUST)
+# PRICE PARSER
 # -----------------------------
 
 def extract_price(text):
@@ -54,9 +54,9 @@ def extract_price(text):
         match = re.search(p, text)
 
         if match:
-            return float(match.group(1).replace(",", ""))
+            return float(match.group(1).replace(",", "")), p
 
-    return None
+    return None, None
 
 
 # -----------------------------
@@ -106,13 +106,12 @@ def scrape_listings(driver, server, rank):
             if len(lines) >= 3:
                 rank_name = lines[2]
 
-            price = extract_price(text)
+            price, pattern = extract_price(text)
 
             if not price:
                 continue
 
-            # si viene en ARS lo convertimos
-            if "ARS" in text:
+            if pattern.startswith("ARS"):
                 price_usd = convertir_ars_a_usd(price, cotizacion)
             else:
                 price_usd = price
@@ -139,7 +138,6 @@ def scrape_listings(driver, server, rank):
 def remove_duplicates(listings):
 
     seen = set()
-
     unique = []
 
     for l in listings:
@@ -148,20 +146,38 @@ def remove_duplicates(listings):
             continue
 
         seen.add(l["url"])
-
         unique.append(l)
 
     return unique
 
 
 # -----------------------------
-# MARKET ANALYSIS (SMART SCAN)
+# GROUP BY RANK
 # -----------------------------
 
-def analyze_market(listings):
+def group_by_rank(listings):
+
+    grouped = {}
+
+    for l in listings:
+
+        rank = l["rank"]
+
+        if rank not in grouped:
+            grouped[rank] = []
+
+        grouped[rank].append(l)
+
+    return grouped
+
+
+# -----------------------------
+# MARKET ANALYSIS
+# -----------------------------
+
+def analyze_market(rank, listings):
 
     if not listings:
-        print("No listings to analyze.")
         return
 
     listings = sorted(listings, key=lambda x: x["price"])
@@ -177,7 +193,6 @@ def analyze_market(listings):
 
             avg = sum(prices) / len(prices)
 
-            # CORTE si el precio se dispara
             if price > avg * 1.45:
                 print("\nMarket range exceeded. Stopping scan.")
                 break
@@ -190,12 +205,12 @@ def analyze_market(listings):
 
     avg_price = sum(prices) / len(prices)
 
-    print("\n--- MARKET DEBUG ---")
+    print(f"\n--- MARKET DEBUG ({rank}) ---")
 
     for l in scanned:
 
         print(
-            f"{l['server']} | {l['rank']} | ${l['price']:.2f}"
+            f"{l['server']} | {rank} | ${l['price']:.2f}"
         )
 
         print(l["url"])
@@ -209,7 +224,7 @@ def analyze_market(listings):
         print("\n🚨 OPPORTUNITY DETECTED")
 
         print(
-            f"{first['server']} | {first['rank']} | ${first['price']:.2f}"
+            f"{first['server']} | {rank} | ${first['price']:.2f}"
         )
 
         print("Market average:", round(avg_price, 2))
@@ -250,7 +265,6 @@ if __name__ == "__main__":
                 try:
 
                     listings = scrape_listings(driver, server, rank)
-
                     all_listings.extend(listings)
 
                 except Exception as e:
@@ -263,7 +277,11 @@ if __name__ == "__main__":
 
         print("\nListings found:", len(all_listings))
 
-        analyze_market(all_listings)
+        grouped = group_by_rank(all_listings)
+
+        for rank, listings in grouped.items():
+
+            analyze_market(rank, listings)
 
         print("\nCycle finished. Waiting 10 minutes.")
 
