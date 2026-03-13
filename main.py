@@ -15,7 +15,7 @@ from utilidades.monedas.conversor import convertir_ars_a_usd, obtener_cotizacion
 
 DB_FILE = "seen_listings.json"
 
-MIN_SCORE = 45
+MIN_SCORE = 35
 ALERT_COOLDOWN = 86400
 
 
@@ -162,6 +162,20 @@ def analyze_market(server, rank, listings):
         return
 
     avg_price = sum(prices) / len(prices)
+
+    cheapest = listings[0]
+
+    cheapest_score = (1 - cheapest["price"] / avg_price) * 100
+
+    print("\nBest price in market:")
+    print(f"{server} | {rank}")
+    print(f"${cheapest['price']:.2f}")
+    print("Score:", round(cheapest_score,2), "%")
+
+    if cheapest_score < MIN_SCORE:
+        diff = MIN_SCORE - cheapest_score
+        print("Missing for opportunity:", round(diff,2), "%")
+        print("URL:", cheapest["url"])
 
     for listing in listings[:5]:
 
