@@ -22,9 +22,9 @@ DB_FILE = "seen_listings.json"
 MIN_SCORE = 35
 ALERT_COOLDOWN = 86400  # 24h
 CYCLE_WAIT = 30
-EXCLUDED_SELLER = "Budaboost"
+BUDABOOST_NAME = "Budaboost"
 
-def send_discord_alert(server, rank, price, score, url):
+def send_discord_alert(server, rank, price, score, url, note=""):
     if not DISCORD_WEBHOOK:
         print("⚠️ Discord webhook not configured")
         return
@@ -35,8 +35,8 @@ Server: {server}
 Rank: {rank}
 Price: ${price:.2f}
 Score: {score:.2f}% below market
-{url}
-"""
+{note}
+{url}"""
         }
         requests.post(DISCORD_WEBHOOK, json=message, timeout=10)
     except Exception as e:
@@ -108,72 +108,55 @@ def scrape_listings(driver, server, rank, url):
     for offer in offers:
         try:
             text = offer.text
-            if EXCLUDED_SELLER.lower() in text.lower():
-                continue
             price, pattern = extract_price(text)
             if not price:
                 continue
             if pattern.startswith("ARS"):
                 price = convertir_ars_a_usd(price, cotizacion)
+            # Nota si es Budaboost
+            note = "💡 Esta oferta pertenece a Budaboost" if BUDABOOST_NAME.lower() in text.lower() else ""
             listings.append({
                 "server": server,
                 "rank": rank,
                 "price": price,
-                "url": offer.get_attribute("href")
+                "url": offer.get_attribute("href"),
+                "note": note
             })
         except Exception as e:
             print("Error processing offer:", e)
     return listings
 
 def analyze_market(server, rank, listings):
-    listings = sorted(listings, key=lambda x: x["price"])
-    prices = []
-    for l in listings:
-        price = l["price"]
-        if prices:
-            avg = sum(prices)/len(prices)
-            if price > avg * 1.45:
-                break
-        prices.append(price)
-    if not prices:
+    if not listings:
         print(f"No valid listings found for {server} | {rank}")
         return
-    avg_price = sum(prices)/len(prices)
-    cheapest = listings[0]
-    cheapest_score = (1 - cheapest["price"]/avg_price)*100
-    is_opportunity = cheapest_score >= MIN_SCORE
 
-    print("\nBest price in market:")
-    print(f"{server} | {rank}")
-    print(f"${cheapest['price']:.2f}")
-    print("Score:", round(cheapest_score,2), "%", "✅ OPPORTUNITY" if is_opportunity else "")
-    print("URL:", cheapest["url"])
-    if not is_opportunity:
-        print("Missing for opportunity:", round(MIN_SCORE - cheapest_score,2), "%")
+    # Ordenar y tomar solo la mejor listing
+    best_listing = min(listings, key=lambda x: x["price"])
+    price = best_listing["price"]
+    url = best_listing["url"]
+    note = best_listing.get("note", "")
+
+    # Calcular promedio para score
+    avg_price = sum(l["price"] for l in listings)/len(listings)
+    score = (1 - price/avg_price)*100
+    remaining = max(0, MIN_SCORE - score)
 
     now = time.time()
-    for listing in listings[:5]:
-        price = listing["price"]
-        score = (1 - price/avg_price)*100
-        url = listing["url"]
-        listing["is_opportunity"] = score >= MIN_SCORE
-        last_alert = seen_listings.get(url, 0)
-        on_cooldown = (now - last_alert) <= ALERT_COOLDOWN
+    is_opportunity = score >= MIN_SCORE
+    last_alert = seen_listings.get(url, 0)
+    on_cooldown = (now - last_alert) <= ALERT_COOLDOWN
 
-        if listing["is_opportunity"]:
-            if on_cooldown:
-                print(f"\n🚀 SNIPING OPPORTUNITY (on cooldown)")
-                print(f"{server} | {rank} | ${price:.2f}")
-                print("Score:", round(score,2), "% below market")
-                print(url)
-            else:
-                print(f"\n🚀 SNIPING OPPORTUNITY")
-                print(f"{server} | {rank} | ${price:.2f}")
-                print("Score:", round(score,2), "% below market")
-                print(url)
-                send_discord_alert(server, rank, price, score, url)
-                seen_listings[url] = now
-                save_seen_listings()
+    status = ""
+    if is_opportunity:
+        status = "OPPORTUNITY (on cooldown)" if on_cooldown else "OPPORTUNITY"
+
+    print(f"{server} | {rank} | ${price:.2f} | {round(score,2)}% | Remaining: {round(remaining,2)}% | {status} | {url} | {note}")
+
+    if is_opportunity and not on_cooldown:
+        send_discord_alert(server, rank, price, score, url, note)
+        seen_listings[url] = now
+        save_seen_listings()
 
 if __name__ == "__main__":
     options = Options()
