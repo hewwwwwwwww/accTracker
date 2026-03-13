@@ -2,6 +2,7 @@ import time
 import re
 import json
 import os
+import requests  # Para enviar alertas a Discord
 
 from selenium import webdriver
 from selenium.webdriver.edge.service import Service
@@ -17,6 +18,30 @@ DB_FILE = "seen_listings.json"
 
 MIN_SCORE = 35
 ALERT_COOLDOWN = 86400
+
+DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL")  # Webhook de Discord
+
+
+def send_discord_alert(server, rank, price, score, url):
+    if not DISCORD_WEBHOOK:
+        print("⚠️ No Discord webhook configured")
+        return
+    try:
+        message = {
+            "content": f"""🚀 **SNIPING OPPORTUNITY**
+
+Server: {server}
+Rank: {rank}
+Price: ${price:.2f}
+Score: {score:.2f}% below market
+
+{url}
+"""
+        }
+        requests.post(DISCORD_WEBHOOK, json=message, timeout=10)
+        print("✅ Discord alert sent")
+    except Exception as e:
+        print("Discord notification error:", e)
 
 
 def load_seen_listings():
@@ -197,6 +222,9 @@ def analyze_market(server, rank, listings):
             print(f"{server} | {rank} | ${price:.2f}")
             print("Score:", round(score,2), "% below market")
             print(url)
+
+            # Enviar alerta a Discord
+            send_discord_alert(server, rank, price, score, url)
 
             seen_listings[url] = now
             save_seen_listings()
