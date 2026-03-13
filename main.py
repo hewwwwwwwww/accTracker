@@ -12,6 +12,13 @@ from utilidades.monedas.conversor import convertir_ars_a_usd, obtener_cotizacion
 
 
 # -----------------------------
+# MEMORY OF SEEN LISTINGS
+# -----------------------------
+
+seen_listings = set()
+
+
+# -----------------------------
 # TARGET URLS
 # -----------------------------
 
@@ -129,37 +136,18 @@ def scrape_listings(driver, server, rank, url):
 
 
 # -----------------------------
-# REMOVE DUPLICATES
-# -----------------------------
-
-def remove_duplicates(listings):
-
-    seen = set()
-    unique = []
-
-    for l in listings:
-
-        if l["url"] in seen:
-            continue
-
-        seen.add(l["url"])
-        unique.append(l)
-
-    return unique
-
-
-# -----------------------------
 # MARKET ANALYSIS
 # -----------------------------
 
 def analyze_market(server, rank, listings):
+
+    global seen_listings
 
     if not listings:
         return
 
     listings = sorted(listings, key=lambda x: x["price"])
 
-    scanned = []
     prices = []
 
     for l in listings:
@@ -171,31 +159,25 @@ def analyze_market(server, rank, listings):
             avg = sum(prices) / len(prices)
 
             if price > avg * 1.45:
-
-                scanned.append(l)
-                prices.append(price)
-
-                print("\nInflated listing included in average.")
                 break
 
-        scanned.append(l)
         prices.append(price)
 
-    if not scanned:
+    if not prices:
         return
 
     avg_price = sum(prices) / len(prices)
 
     print(f"\n--- MARKET DEBUG ({server} {rank.upper()}) ---")
 
-    for l in scanned:
+    for l in listings[:len(prices)]:
 
         print(f"{server} | {rank} | ${l['price']:.2f}")
         print(l["url"])
 
     print("\nAverage price:", round(avg_price, 2))
 
-    first = scanned[0]
+    first = listings[0]
 
     threshold = avg_price * 0.55
     distance = first["price"] - threshold
@@ -204,12 +186,25 @@ def analyze_market(server, rank, listings):
     print("Cheapest listing:", round(first["price"], 2))
     print("Distance to opportunity:", round(distance, 2))
 
+    score = (1 - first["price"] / avg_price) * 100
+
+    if first["url"] not in seen_listings:
+
+        seen_listings.add(first["url"])
+
+        print("\n🚀 NEW LISTING OPPORTUNITY")
+
+        print(f"{server} | {rank} | ${first['price']:.2f}")
+        print("Score:", round(score, 2), "% below market")
+        print(first["url"])
+
     if first["price"] < threshold:
 
-        print("\n🚨 OPPORTUNITY DETECTED")
+        print("\n🚨 OPPORTUNITY DETECTED (AVG DETECTOR)")
 
         print(f"{server} | {rank} | ${first['price']:.2f}")
         print("Market average:", round(avg_price, 2))
+        print("Score:", round(score, 2), "% below market")
         print(first["url"])
 
 
@@ -234,8 +229,6 @@ if __name__ == "__main__":
 
                 listings = scrape_listings(driver, server, rank, url)
 
-                listings = remove_duplicates(listings)
-
                 analyze_market(server, rank, listings)
 
             except Exception as e:
@@ -244,6 +237,6 @@ if __name__ == "__main__":
 
             time.sleep(5)
 
-        print("\nCycle finished. Waiting 10 minutes.")
+        print("\nCycle finished. Waiting 60 seconds.")
 
-        time.sleep(600)
+        time.sleep(60)
