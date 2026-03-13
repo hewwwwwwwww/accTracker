@@ -13,54 +13,35 @@ from selenium.webdriver.support import expected_conditions as EC
 from utilidades.monedas.conversor import convertir_ars_a_usd, obtener_cotizacion
 
 
-# -----------------------------
-# LISTING DATABASE
-# -----------------------------
-
 DB_FILE = "seen_listings.json"
+
+MIN_SCORE = 45
+ALERT_COOLDOWN = 86400
 
 
 def load_seen_listings():
 
     if not os.path.exists(DB_FILE):
-        return set()
+        return {}
 
     try:
-
         with open(DB_FILE, "r", encoding="utf-8") as f:
-
-            data = json.load(f)
-
-            return set(data.get("listings", []))
-
-    except Exception:
-
-        return set()
+            return json.load(f)
+    except:
+        return {}
 
 
 def save_seen_listings():
 
     try:
-
         with open(DB_FILE, "w", encoding="utf-8") as f:
-
-            json.dump(
-                {"listings": list(seen_listings)},
-                f,
-                indent=2
-            )
-
+            json.dump(seen_listings, f, indent=2)
     except Exception as e:
-
         print("DB save error:", e)
 
 
 seen_listings = load_seen_listings()
 
-
-# -----------------------------
-# TARGET URLS
-# -----------------------------
 
 TARGET_URLS = {
 
@@ -84,10 +65,6 @@ TARGET_URLS = {
 }
 
 
-# -----------------------------
-# PRICE PARSER
-# -----------------------------
-
 def extract_price(text):
 
     patterns = [
@@ -106,10 +83,6 @@ def extract_price(text):
 
     return None, None
 
-
-# -----------------------------
-# SCRAPER
-# -----------------------------
 
 def scrape_listings(driver, server, rank, url):
 
@@ -160,15 +133,11 @@ def scrape_listings(driver, server, rank, url):
                 "url": offer.get_attribute("href")
             })
 
-        except Exception:
+        except:
             continue
 
     return listings
 
-
-# -----------------------------
-# MARKET ANALYSIS
-# -----------------------------
 
 def analyze_market(server, rank, listings):
 
@@ -194,30 +163,36 @@ def analyze_market(server, rank, listings):
 
     avg_price = sum(prices) / len(prices)
 
-    first = listings[0]
+    for listing in listings[:5]:
 
-    score = (1 - first["price"] / avg_price) * 100
+        price = listing["price"]
 
-    if first["url"] not in seen_listings:
+        score = (1 - price / avg_price) * 100
 
-        seen_listings.add(first["url"])
+        url = listing["url"]
 
-        save_seen_listings()
+        if url not in seen_listings:
+            seen_listings[url] = 0
 
-        print("\n🚀 NEW LISTING")
-        print(f"{server} | {rank} | ${first['price']:.2f}")
-        print("Score:", round(score, 2), "% below market")
-        print(first["url"])
+        now = time.time()
+        last_alert = seen_listings[url]
 
+        if score >= MIN_SCORE and (now - last_alert) > ALERT_COOLDOWN:
 
-# -----------------------------
-# MAIN LOOP
-# -----------------------------
+            print("\n🚀 SNIPING OPPORTUNITY")
+            print(f"{server} | {rank} | ${price:.2f}")
+            print("Score:", round(score,2), "% below market")
+            print(url)
+
+            seen_listings[url] = now
+            save_seen_listings()
+
 
 if __name__ == "__main__":
 
     options = Options()
     options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--log-level=3")
 
     service = Service("C:/drivers/msedgedriver.exe")
 
