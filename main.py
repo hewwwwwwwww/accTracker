@@ -142,6 +142,7 @@ def analyze_market(server, rank, listings):
     cheapest = listings[0]
     cheapest_score = (1 - cheapest["price"]/avg_price)*100
     is_opportunity = cheapest_score >= MIN_SCORE
+
     print("\nBest price in market:")
     print(f"{server} | {rank}")
     print(f"${cheapest['price']:.2f}")
@@ -150,21 +151,29 @@ def analyze_market(server, rank, listings):
     if not is_opportunity:
         print("Missing for opportunity:", round(MIN_SCORE - cheapest_score,2), "%")
 
+    now = time.time()
     for listing in listings[:5]:
         price = listing["price"]
         score = (1 - price/avg_price)*100
         url = listing["url"]
         listing["is_opportunity"] = score >= MIN_SCORE
-        now = time.time()
-        last_alert = seen_listings.get(url,0)
-        if listing["is_opportunity"] and (now - last_alert) > ALERT_COOLDOWN:
-            print("\n🚀 SNIPING OPPORTUNITY")
-            print(f"{server} | {rank} | ${price:.2f}")
-            print("Score:", round(score,2), "% below market")
-            print(url)
-            send_discord_alert(server, rank, price, score, url)
-            seen_listings[url] = now
-            save_seen_listings()
+        last_alert = seen_listings.get(url, 0)
+        on_cooldown = (now - last_alert) <= ALERT_COOLDOWN
+
+        if listing["is_opportunity"]:
+            if on_cooldown:
+                print(f"\n🚀 SNIPING OPPORTUNITY (on cooldown)")
+                print(f"{server} | {rank} | ${price:.2f}")
+                print("Score:", round(score,2), "% below market")
+                print(url)
+            else:
+                print(f"\n🚀 SNIPING OPPORTUNITY")
+                print(f"{server} | {rank} | ${price:.2f}")
+                print("Score:", round(score,2), "% below market")
+                print(url)
+                send_discord_alert(server, rank, price, score, url)
+                seen_listings[url] = now
+                save_seen_listings()
 
 if __name__ == "__main__":
     options = Options()
