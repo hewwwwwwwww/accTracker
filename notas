@@ -1,8 +1,8 @@
 Reader:
 El reader no lee los FRAGMENTOS DE SKIN del loot que sean permanentes (borde dorado) (listo)
-Averiguar si se puede agregar la cantidad de reembolsos que tiene disponibles la cuenta, y en caso de no ser 3 no mostrarlos.
-Averiguar si se puede verificar que el cambio de nombre de usuario está o no disponible, y en caso de que si, listarlo para el mensaje final
-Averiguar si hay alguna forma de eliminar a todos los amigos de una con un boton
+Averiguar si se puede agregar la cantidad de reembolsos que tiene disponibles la cuenta, y en caso de no ser 3 no mostrarlos. (listo)
+Averiguar si se puede verificar que el cambio de nombre de usuario está o no disponible, y en caso de que si, listarlo para el mensaje final (listo, revisar)
+Averiguar si hay alguna forma de eliminar a todos los amigos de una con un boton (listo)
 Averiguar si hay alguna forma de poner un estado en la cuenta con un botón
 El reader muestar mal el servidor, ya que muestra el TAG del nombre #333 y no el servidor de donde proviene la cuenta (LAS - LAN - BR..)
 

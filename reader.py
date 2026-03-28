@@ -136,10 +136,15 @@ def get_current_summoner():
 
         print(f"👤 Champions: {len(champs)}")
         print(f"🎨 Skins: {skinz}")
+        refunds = get_refund_info()
+        if refunds >= 3:
+            print(f"💸 Refunds: {refunds}")
 
         future_loot.result()
 
-        print("🔄 Can change nickname\n✉️  Can change e-mail\n🔐 Full access\n✅ 0% Ban Chance\n🚀 Instant Delivery")
+        if can_change_name():
+            print("🔄 Can change nickname")
+        print("✉️  Can change e-mail\n🔐 Full access\n✅ 0% Ban Chance\n🚀 Instant Delivery")
         print("━━━━━━━━━━━━━━━━━━━━━━━━━")
 
         print(f"\nChampions ({len(champs)}):")
@@ -155,6 +160,25 @@ def get_current_summoner():
         print(champ_response.text)
 
 
+
+def can_change_name():
+    info, headers = get_connection()
+    if not info:
+        return False
+
+    url = f"https://127.0.0.1:{info['port']}/lol-summoner/v1/name-change"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return False
+
+    if response.status_code != 200:
+        return False
+
+    data = response.json()
+
+    return data.get("canChangeSummonerName", False)
 # =========================
 # SKINS
 # =========================
@@ -435,12 +459,65 @@ def get_champion_skins_shards_list():
     return champ_str.strip(), skin_str.strip()
 
 
+def get_refund_info():
+    info, headers = get_connection()
+    if not info:
+        print("❌ No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
+        return 0
+
+    url = f"https://127.0.0.1:{info['port']}/lol-store/v1/refund-inventory"
+
+    response = requests.get(url, headers=headers, verify=False)
+
+    if response.status_code != 200:
+        return 0  # 🔒 no romper output si falla
+
+    data = response.json()
+    return data.get("refundCredits", 0)
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+def delete_all_friends():
+    info, headers = get_connection()
+    if not info:
+        return
+
+    url = f"https://127.0.0.1:{info['port']}/lol-chat/v1/friends"
+    response = requests.get(url, headers=headers, verify=False)
+
+    if response.status_code != 200:
+        return
+
+    friends = response.json()
+
+    if not friends:
+        return
+
+
+    def delete_friend(puuid):
+        try:
+            delete_url = f"https://127.0.0.1:{info['port']}/lol-chat/v1/friends/{puuid}"
+            requests.delete(delete_url, headers=headers, verify=False)
+        except:
+            pass  # no queremos romper por uno que falle
+
+    # ⚡ THREADS
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [
+            executor.submit(delete_friend, f.get("puuid"))
+            for f in friends if f.get("puuid")
+        ]
+
+        # opcional: esperar a que todos terminen
+        for _ in as_completed(futures):
+            pass
 
 # =========================
 # MAIN
 # =========================
 
 if __name__ == "__main__":
+    delete_all_friends()
     get_current_summoner()
     get_show_skins()
 
