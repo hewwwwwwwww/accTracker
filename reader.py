@@ -354,8 +354,11 @@ def get_champion_skins_shards_list():
 
     loot = response.json()
 
-    champion_shards = []
-    skin_shards = []
+    champ_perm = {}
+    champ_temp = {}
+
+    skin_perm = {}
+    skin_temp = {}
 
     for item in loot:
         loot_id = item.get('lootId', '')
@@ -365,17 +368,69 @@ def get_champion_skins_shards_list():
         if not desc or count <= 0:
             continue
 
-        # 🔥 CAMBIO IMPORTANTE: incluir shards reales + rental
-        if loot_id.startswith("CHAMPION"):
-            for _ in range(count):
-                champion_shards.append(desc)
+        # CHAMPIONS
+        if loot_id.startswith("CHAMPION_") and not loot_id.startswith("CHAMPION_SKIN"):
+            if loot_id.startswith("CHAMPION_RENTAL"):
+                champ_temp[desc] = champ_temp.get(desc, 0) + count
+            else:
+                champ_perm[desc] = champ_perm.get(desc, 0) + count
 
+        # SKINS
         elif loot_id.startswith("CHAMPION_SKIN"):
-            for _ in range(count):
-                skin_shards.append(desc)
+            if loot_id.startswith("CHAMPION_SKIN_RENTAL"):
+                skin_temp[desc] = skin_temp.get(desc, 0) + count
+            else:
+                skin_perm[desc] = skin_perm.get(desc, 0) + count
 
-    champ_str = f"Champions Shards ({len(champion_shards)}):\n" + ''.join(f"-{c}\n" for c in champion_shards)
-    skin_str = f"Skin Shards ({len(skin_shards)}):\n" + ''.join(f"-{s}\n" for s in skin_shards)
+    # =========================
+    # SORTING
+    # =========================
+
+    # Champions permanentes → alfabético
+    champ_perm_sorted = sorted(champ_perm.items(), key=lambda x: x[0].lower())
+
+    # Champions temporales → cantidad DESC, luego nombre
+    champ_temp_sorted = sorted(
+        champ_temp.items(),
+        key=lambda x: (-x[1], x[0].lower())
+    )
+
+    # Skins permanentes → alfabético
+    skin_perm_sorted = sorted(skin_perm.items(), key=lambda x: x[0].lower())
+
+    # Skins temporales → alfabético
+    skin_temp_sorted = sorted(skin_temp.items(), key=lambda x: x[0].lower())
+
+    # =========================
+    # FORMAT
+    # =========================
+
+    champ_lines = []
+
+    for name, count in champ_perm_sorted:
+        suffix = " (permanent)"
+        if count > 1:
+            suffix += f" (x{count})"
+        champ_lines.append(f"-{name}{suffix}")
+
+    for name, count in champ_temp_sorted:
+        suffix = f" (x{count})" if count > 1 else ""
+        champ_lines.append(f"-{name}{suffix}")
+
+    skin_lines = []
+
+    for name, count in skin_perm_sorted:
+        suffix = " (permanent)"
+        if count > 1:
+            suffix += f" (x{count})"
+        skin_lines.append(f"-{name}{suffix}")
+
+    for name, count in skin_temp_sorted:
+        suffix = f" (x{count})" if count > 1 else ""
+        skin_lines.append(f"-{name}{suffix}")
+
+    champ_str = f"Champions Shards ({len(champ_lines)}):\n" + "\n".join(champ_lines)
+    skin_str = f"Skin Shards ({len(skin_lines)}):\n" + "\n".join(skin_lines)
 
     return champ_str.strip(), skin_str.strip()
 
