@@ -127,8 +127,6 @@ def get_current_summoner():
     if champ_response.status_code == 200:
         champs = champ_response.json()
 
-        print("⭐ BUDA  ⭐  BOOST ⭐\n")
-        print("━━━━━━━━━━━━━━━━━━━━━━━━━")
 
         # estos ya imprimieron dentro del thread
         future_summoner.result()
@@ -259,13 +257,12 @@ def get_summoner_basic_info():
     if response.status_code == 200:
         s = response.json()
 
-        region_map = {
-            'la2': 'LAS', 'la1': 'LAN', 'br1': 'BR', 'na1': 'NA',
-            'euw1': 'EUW', 'eun1': 'EUNE', 'kr': 'KR', 'jp1': 'JP',
-            'ru': 'RU', 'tr1': 'TR', 'oc1': 'OCE'
-        }
+        region = get_real_region()
 
-        region = region_map.get(s.get('tagLine', '').lower(), s.get('tagLine', '').upper())
+        # 🔥 fallback inteligente
+        if region == "Desconocido":
+            tag = s.get('tagLine', '')
+            region = tag.upper() if tag else "Desconocido"
 
         print(f"🌐 Server: {region}")
         print(f"📈 Level: {s.get('summonerLevel', 'Desconocido')}")
@@ -512,11 +509,51 @@ def delete_all_friends():
         for _ in as_completed(futures):
             pass
 
+def get_real_region():
+    info, headers = get_connection()
+    if not info:
+        return "Desconocido"
+
+    try:
+        url = f"https://127.0.0.1:{info['port']}/lol-platform-config/v1/namespaces"
+        response = requests.get(url, headers=headers, verify=False)
+
+        if response.status_code != 200:
+            return "Desconocido"
+
+        data = response.json()
+
+        # ✅ FIX AQUÍ
+        region_raw = data.get("LoginDataPacket", {}).get("platformId", "").lower()
+
+        region_map = {
+            'la2': 'LAS',
+            'la1': 'LAN',
+            'br1': 'BR',
+            'na1': 'NA',
+            'euw1': 'EUW',
+            'eun1': 'EUNE',
+            'kr': 'KR',
+            'jp1': 'JP',
+            'ru': 'RU',
+            'tr1': 'TR',
+            'oc1': 'OCE'
+        }
+
+        return region_map.get(region_raw, region_raw.upper() if region_raw else "Desconocido")
+
+    except Exception as e:
+        print("❌ Error obteniendo región:", e)
+        return "Desconocido"
+
 # =========================
 # MAIN
 # =========================
 
 if __name__ == "__main__":
+    print("⭐ BUDA  ⭐  BOOST ⭐\n")  # 👈 ARRIBA DEL TODO
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━")
+
     delete_all_friends()
     get_current_summoner()
     get_show_skins()
