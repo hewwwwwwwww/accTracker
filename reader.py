@@ -598,6 +598,163 @@ def set_status_message(message):
     except:
         return False
 
+def generate_title(
+    server,
+    rank,
+    level,
+    skins,
+    lp_per_win,
+    champions
+):
+    parts = []
+
+    # 🔹 SERVER
+    parts.append(f"【{server}】")
+
+    # 🔹 RANK
+    parts.append(f"✔️ {rank}")
+
+    # 🔹 SKINS
+    if skins and skins > 20:
+        parts.append(f"✔️ +{skins} SKINS")
+
+    # 🔹 LP/WIN
+    if lp_per_win and lp_per_win > 30:
+        parts.append(f"✔️ +{lp_per_win} LP/WIN")
+
+    # 🔹 SEASON (fijo)
+    parts.append("✔️ SEASON 16")
+
+    # 🔹 CHAMPIONS
+    if champions and champions > 70:
+        parts.append(f"✔️ {champions} Champions")
+
+    # 🔹 LEVEL
+    if level and level > 70:
+        parts.append(f"✔️ {level} LVL")
+
+    # 🔹 HANDLEVELED
+    if level and level < 90:
+        parts.append("✔️ HANDLVL")
+
+    # 🔹 FINAL FIJO
+    parts.append("✔️ FULL ACCESS")
+    parts.append("✔️ INSTANT DELIVERY")
+
+    # 🔥 JOIN
+    return " | ".join(parts)
+
+
+def generate_title_v2(
+    server,
+    rank,
+    level,
+    skins,
+    skin_shards,
+    lp_per_win,
+    champions,
+    blue_essence,
+    orange_essence
+):
+    parts = []
+
+    # 🔹 SIEMPRE
+    parts.append(f"【{server}】")
+    parts.append(f"✔️ {rank}")
+
+    # 🔹 SKIN SHARDS
+    if skin_shards and skin_shards > 15:
+        parts.append(f"✔️ {skin_shards} Skin Shards")
+
+    # 🔹 LP/WIN
+    if lp_per_win and lp_per_win >= 30:
+        parts.append(f"✔️ +{lp_per_win} LP/WIN")
+
+    # 🔹 SKINS
+    if skins and skins > 30:
+        parts.append(f"✔️ +{skins} Skins")
+
+    # 🔹 SEASON (SIEMPRE)
+    parts.append("✔️ SEASON 16")
+
+    # 🔹 LEVEL
+    if level and level > 70:
+        parts.append(f"✔️ {level} LVL")
+
+    # 🔹 BLUE ESSENCE
+    if blue_essence and blue_essence > 5000:
+        parts.append(f"✔️ {blue_essence} BE")
+
+    # 🔹 ORANGE ESSENCE
+    if orange_essence and orange_essence > 5000:
+        parts.append(f"✔️ {orange_essence} OE")
+
+    # 🔹 CHAMPIONS
+    if champions and champions > 45:
+        parts.append(f"✔️ {champions} Champions")
+
+    # 🔥 ARMADO FINAL
+    title_main = " | ".join(parts)
+
+    # 🔻 SUFIJO FIJO
+    suffix = "|✔️HANDLVL|✔️FRESH ACC|✔️0% BAN CHANCE|✔️FULL ACCESS|✔️INSTANT DELIVERY"
+
+    return f"{title_main} {suffix}"
+
+def estimate_lp_per_win(wins, losses, level):
+    if not wins or not losses:
+        return None
+
+    total = wins + losses
+    if total == 0:
+        return None
+
+    winrate = wins / total
+
+    if winrate >= 0.65:
+        return 30
+    elif winrate >= 0.55:
+        return 25
+    elif winrate >= 0.50:
+        return 22
+    else:
+        return None
+
+def get_rank_wins_losses():
+    info, headers = get_connection()
+    if not info:
+        return None, None
+
+    url = f"https://127.0.0.1:{info['port']}/lol-ranked/v1/current-ranked-stats"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return None, None
+
+    if response.status_code != 200:
+        return None, None
+
+    data = response.json()
+
+    soloq = next(
+        (q for q in data.get('queues', []) if q.get('queueType') == 'RANKED_SOLO_5x5'),
+        None
+    )
+
+    if not soloq:
+        return None, None
+
+    # 🔥 si está en placements → no hay wins/losses reales
+    if soloq.get("type") == "placements":
+        return None, None
+
+    return soloq.get("wins"), soloq.get("losses")
+
+
+############################
+#PRINTER
+############################
 def print_summary(seller_name, server_region, summoner_level, rank_info, placements, champions_count, skins_count, blue_essence, orange_essence, chests_count, keys_count, refunds_remaining, can_change_name):
     print(seller_name)
     print("━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -709,6 +866,34 @@ if __name__ == "__main__":
     set_status_message(
         "⭐ BUDA BOOST ⭐ | Unranked | 30K BE | Full Access"
     )
+
+    win, losses = get_rank_wins_losses()
+    lp_per_win = estimate_lp_per_win(win, losses, level) if win and losses else None
+
+    # title = generate_title(
+    #     server=server,
+    #     rank=rank,
+    #     level=level,
+    #     skins=skins_count,
+    #     lp_per_win=lp_per_win,
+    #     champions=champions_count
+    # )
+    # print("\nGenerated Title:")
+    # print(title)
+
+    title = generate_title_v2(
+        server=server,
+        rank=rank,
+        level=level,
+        skins=skins_count,
+        skin_shards=len(skin_shard_list.splitlines()) if skin_shard_list else 0,
+        lp_per_win=lp_per_win,
+        champions=champions_count,
+        blue_essence=blue_essence,
+        orange_essence=orange_essence
+    )
+    print("\nGenerated Title:")
+    print(title)
 
 
 
