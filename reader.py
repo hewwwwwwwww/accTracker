@@ -3,7 +3,7 @@ import base64
 import os
 import psutil
 import urllib3
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 urllib3.disable_warnings()
 
@@ -56,9 +56,10 @@ def get_connection():
 
     info = parse_lockfile(lockfile)
     auth = base64.b64encode(f"riot:{info['password']}".encode()).decode()
-    headers = {"Authorization": f"Basic {auth}"}
 
+    headers = {"Authorization": f"Basic {auth}"}
     CACHE["connection"] = (info, headers)
+
     return info, headers
 
 
@@ -419,103 +420,54 @@ def get_skins_count():
     return sum(1 for sid in owned_ids if sid in id_to_name)
 
 
-def get_blue_essence():
+def get_loot():
     info, headers = get_connection()
     if not info:
         return None
 
-    url = f"https://127.0.0.1:{info['port']}/lol-loot/v1/player-loot"
-
     try:
-        response = requests.get(url, headers=headers, verify=False)
+        r = requests.get(
+            f"https://127.0.0.1:{info['port']}/lol-loot/v1/player-loot",
+            headers=headers,
+            verify=False
+        )
+        return r.json() if r.status_code == 200 else None
     except:
         return None
 
-    if response.status_code != 200:
+def get_blue_essence():
+    loot = get_loot()
+    if not loot:
         return None
-
-    loot = response.json()
 
     for item in loot:
         if item.get('lootId') == "CURRENCY_champion":
             return item.get('count', 0)
-
     return 0
 
 def get_orange_essence():
-    info, headers = get_connection()
-    if not info:
+    loot = get_loot()
+    if not loot:
         return None
-
-    url = f"https://127.0.0.1:{info['port']}/lol-loot/v1/player-loot"
-
-    try:
-        response = requests.get(url, headers=headers, verify=False)
-    except:
-        return None
-
-    if response.status_code != 200:
-        return None
-
-    loot = response.json()
 
     for item in loot:
         if item.get('lootId') == "CURRENCY_cosmetic":
             return item.get('count', 0)
-
     return 0
 
 def get_hextech_chests():
-    info, headers = get_connection()
-    if not info:
+    loot = get_loot()
+    if not loot:
         return None
 
-    url = f"https://127.0.0.1:{info['port']}/lol-loot/v1/player-loot"
-
-    try:
-        response = requests.get(url, headers=headers, verify=False)
-    except:
-        return None
-
-    if response.status_code != 200:
-        return None
-
-    loot = response.json()
-
-    chests = 0
-
-    for item in loot:
-        loot_id = item.get('lootId', '')
-        if loot_id.startswith("CHEST"):
-            chests += item.get('count', 0)
-
-    return chests
+    return sum(item.get('count', 0) for item in loot if item.get('lootId', '').startswith("CHEST"))
 
 def get_hextech_keys():
-    info, headers = get_connection()
-    if not info:
+    loot = get_loot()
+    if not loot:
         return None
 
-    url = f"https://127.0.0.1:{info['port']}/lol-loot/v1/player-loot"
-
-    try:
-        response = requests.get(url, headers=headers, verify=False)
-    except:
-        return None
-
-    if response.status_code != 200:
-        return None
-
-    loot = response.json()
-
-    keys = 0
-
-    for item in loot:
-        loot_id = item.get('lootId', '')
-        if loot_id.startswith("MATERIAL_key"):
-            keys += item.get('count', 0)
-
-    return keys
+    return sum(item.get('count', 0) for item in loot if item.get('lootId', '').startswith("MATERIAL_key"))
 
 def get_refunds_remaining():
     info, headers = get_connection()
@@ -598,52 +550,6 @@ def set_status_message(message):
     except:
         return False
 
-def generate_title(
-    server,
-    rank,
-    level,
-    skins,
-    lp_per_win,
-    champions
-):
-    parts = []
-
-    # 🔹 SERVER
-    parts.append(f"【{server}】")
-
-    # 🔹 RANK
-    parts.append(f"✔️ {rank}")
-
-    # 🔹 SKINS
-    if skins and skins > 20:
-        parts.append(f"✔️ +{skins} SKINS")
-
-    # 🔹 LP/WIN
-    if lp_per_win and lp_per_win > 30:
-        parts.append(f"✔️ +{lp_per_win} LP/WIN")
-
-    # 🔹 SEASON (fijo)
-    parts.append("✔️ SEASON 16")
-
-    # 🔹 CHAMPIONS
-    if champions and champions > 70:
-        parts.append(f"✔️ {champions} Champions")
-
-    # 🔹 LEVEL
-    if level and level > 70:
-        parts.append(f"✔️ {level} LVL")
-
-    # 🔹 HANDLEVELED
-    if level and level < 90:
-        parts.append("✔️ HANDLVL")
-
-    # 🔹 FINAL FIJO
-    parts.append("✔️ FULL ACCESS")
-    parts.append("✔️ INSTANT DELIVERY")
-
-    # 🔥 JOIN
-    return " | ".join(parts)
-
 
 def generate_title_v2(
     server,
@@ -725,31 +631,28 @@ def get_rank_wins_losses():
     if not info:
         return None, None
 
-    url = f"https://127.0.0.1:{info['port']}/lol-ranked/v1/current-ranked-stats"
-
     try:
-        response = requests.get(url, headers=headers, verify=False)
+        r = requests.get(
+            f"https://127.0.0.1:{info['port']}/lol-ranked/v1/current-ranked-stats",
+            headers=headers,
+            verify=False
+        )
+        if r.status_code != 200:
+            return None, None
+
+        data = r.json()
+        soloq = next(
+            (q for q in data.get('queues', []) if q.get('queueType') == 'RANKED_SOLO_5x5'),
+            None
+        )
+
+        if not soloq or soloq.get("type") == "placements":
+            return None, None
+
+        return soloq.get("wins"), soloq.get("losses")
+
     except:
         return None, None
-
-    if response.status_code != 200:
-        return None, None
-
-    data = response.json()
-
-    soloq = next(
-        (q for q in data.get('queues', []) if q.get('queueType') == 'RANKED_SOLO_5x5'),
-        None
-    )
-
-    if not soloq:
-        return None, None
-
-    # 🔥 si está en placements → no hay wins/losses reales
-    if soloq.get("type") == "placements":
-        return None, None
-
-    return soloq.get("wins"), soloq.get("losses")
 
 
 ############################
@@ -758,29 +661,42 @@ def get_rank_wins_losses():
 def print_summary(seller_name, server_region, summoner_level, rank_info, placements, champions_count, skins_count, blue_essence, orange_essence, chests_count, keys_count, refunds_remaining, can_change_name):
     print(seller_name)
     print("━━━━━━━━━━━━━━━━━━━━━━━━━")
+
     if server_region != "Desconocido":
         print(f"🌐 Server: {server_region}")
+
     if summoner_level is not None:
         print(f"📈 Level: {summoner_level}")
-    print(f"🎯Rank(Soloq): {rank_info}")
-    if placements is not None:
-        print(f"📊 Placements: {placements}")
+
+    print(f"🎯 Rank(Soloq): {rank_info}")
+
+    if placements:
+        print(placements)
+
     if champions_count is not None:
         print(f"👤 Champions: {champions_count}")
+
     if skins_count is not None:
         print(f"🎨 Skins: {skins_count}")
-    if blue_essence is not None and blue_essence > 499:
+
+    if blue_essence and blue_essence > 499:
         print(f"🔵 Blue Essence: {blue_essence}")
-    if orange_essence is not None and orange_essence > 499:
+
+    if orange_essence and orange_essence > 499:
         print(f"🟠 Orange Essence: {orange_essence}")
+
     if chests_count is not None:
         print(f"📦 Hextech Chests: {chests_count}")
+
     if keys_count is not None:
         print(f"🗝️ Hextech Keys: {keys_count}")
+
     if refunds_remaining is not None:
         print(f"🔙 Refunds Remaining: {refunds_remaining}")
-    if can_change_name is not None and can_change_name:
+
+    if can_change_name:
         print("🔄 Can change nickname")
+
     print("✉️  Can change e-mail\n🔐 Full access\n✅ 0% Ban Chance\n🚀 Instant Delivery")
 
 
