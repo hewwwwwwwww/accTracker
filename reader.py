@@ -99,253 +99,6 @@ def get_skin_map():
 
     return CACHE["skin_map"]
 
-
-# =========================
-# CORE
-# =========================
-
-def get_current_summoner():
-    info, headers = get_connection()
-    if not info:
-        print("No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
-        return
-
-    id_to_name = get_champion_id_map()
-
-    champ_url = f"https://127.0.0.1:{info['port']}/lol-champions/v1/owned-champions-minimal"
-
-    with ThreadPoolExecutor() as executor:
-        future_champs = executor.submit(requests.get, champ_url, headers=headers, verify=False)
-        future_summoner = executor.submit(get_summoner_basic_info)
-        future_ranked = executor.submit(get_current_ranked_info)
-        future_skins = executor.submit(get_skins_count)
-        future_loot = executor.submit(get_loot_info)
-
-        champ_response = future_champs.result()
-        skinz = future_skins.result()
-
-    if champ_response.status_code == 200:
-        champs = champ_response.json()
-
-
-        # estos ya imprimieron dentro del thread
-        future_summoner.result()
-        future_ranked.result()
-
-        print(f"👤 Champions: {len(champs)}")
-        print(f"🎨 Skins: {skinz}")
-        refunds = get_refund_info()
-        if refunds >= 3:
-            print(f"💸 Refunds: {refunds}")
-
-        future_loot.result()
-
-        if can_change_name():
-            print("🔄 Can change nickname")
-        print("✉️  Can change e-mail\n🔐 Full access\n✅ 0% Ban Chance\n🚀 Instant Delivery")
-        print("━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-        print(f"\nChampions ({len(champs)}):")
-        for champ in champs:
-            champ_id = champ['id']
-            nombre = id_to_name.get(champ_id, f"Desconocido (ID: {champ_id})")
-            print(f"- {nombre}")
-
-        return len(champs)
-
-    else:
-        print("\nError al obtener campeones.")
-        print(champ_response.text)
-
-
-
-def can_change_name():
-    info, headers = get_connection()
-    if not info:
-        return False
-
-    url = f"https://127.0.0.1:{info['port']}/lol-summoner/v1/name-change"
-
-    try:
-        response = requests.get(url, headers=headers, verify=False)
-    except:
-        return False
-
-    if response.status_code != 200:
-        return False
-
-    data = response.json()
-
-    return data.get("canChangeSummonerName", False)
-# =========================
-# SKINS
-# =========================
-
-def get_show_skins():
-    info, headers = get_connection()
-    if not info:
-        print("❌ No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
-        return
-
-    response = requests.get(
-        f"https://127.0.0.1:{info['port']}/lol-inventory/v2/inventory/CHAMPION_SKIN",
-        headers=headers,
-        verify=False
-    )
-
-    if response.status_code != 200:
-        print(f"❌ Error al obtener skins: {response.status_code}")
-        return
-
-    skins_data = response.json()
-    owned_ids = [s['itemId'] for s in skins_data]
-
-    id_to_name = get_skin_map()
-
-    reconocidas = 0
-    reconocidas_str = []
-
-    for sid in owned_ids:
-        nombre = id_to_name.get(sid)
-        if nombre:
-            reconocidas += 1
-            reconocidas_str.append(f"- {nombre}")
-
-    print(f"\n Skins ({reconocidas}):")
-    print("\n".join(reconocidas_str))
-
-    return reconocidas
-
-
-def get_skins_count():
-    info, headers = get_connection()
-    if not info:
-        print("❌ No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
-        return
-
-    response = requests.get(
-        f"https://127.0.0.1:{info['port']}/lol-inventory/v2/inventory/CHAMPION_SKIN",
-        headers=headers,
-        verify=False
-    )
-
-    if response.status_code != 200:
-        print(f"❌ Error al obtener skins: {response.status_code}")
-        return
-
-    skins_data = response.json()
-    owned_ids = [s['itemId'] for s in skins_data]
-
-    id_to_name = get_skin_map()
-
-    return sum(1 for sid in owned_ids if sid in id_to_name)
-
-
-# =========================
-# SUMMONER INFO
-# =========================
-
-def get_summoner_basic_info():
-    info, headers = get_connection()
-    if not info:
-        print("❌ No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
-        return
-
-    url = f"https://127.0.0.1:{info['port']}/lol-summoner/v1/current-summoner"
-    response = requests.get(url, headers=headers, verify=False)
-
-    if response.status_code == 200:
-        s = response.json()
-
-        region = get_real_region()
-
-        # 🔥 fallback inteligente
-        if region == "Desconocido":
-            tag = s.get('tagLine', '')
-            region = tag.upper() if tag else "Desconocido"
-
-        print(f"🌐 Server: {region}")
-        print(f"📈 Level: {s.get('summonerLevel', 'Desconocido')}")
-
-    else:
-        print(f"❌ Error al obtener datos del invocador: {response.status_code}")
-
-
-# =========================
-# RANKED
-# =========================
-
-def get_current_ranked_info():
-    info, headers = get_connection()
-    if not info:
-        print("❌ No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
-        return
-
-    url = f"https://127.0.0.1:{info['port']}/lol-ranked/v1/current-ranked-stats"
-    response = requests.get(url, headers=headers, verify=False)
-
-    if response.status_code == 200:
-        data = response.json()
-        soloq = next((q for q in data['queues'] if q['queueType'] == 'RANKED_SOLO_5x5'), None)
-
-        if soloq:
-            wins = soloq['wins']
-            losses = soloq['losses']
-            total = wins + losses
-            winrate = round((wins / total) * 100, 1) if total > 0 else 0.0
-
-            print(f"🎯 Rank(Soloq): {soloq['tier'].capitalize()} {soloq['division']} - {soloq['leaguePoints']} LP")
-            print(f"📊 Winrate: {winrate}% ({wins}W / {losses}L)")
-        else:
-            print("⚠️  No hay datos de SoloQ.")
-
-
-# =========================
-# LOOT
-# =========================
-
-def get_loot_info():
-    info, headers = get_connection()
-    if not info:
-        print("❌ No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
-        return
-
-    url = f"https://127.0.0.1:{info['port']}/lol-loot/v1/player-loot"
-    response = requests.get(url, headers=headers, verify=False)
-
-    if response.status_code != 200:
-        print(f"❌ Error al obtener botín: {response.status_code}")
-        return
-
-    loot = response.json()
-
-    blue = orange = chests = keys = 0
-
-    for item in loot:
-        lid = item.get('lootId', '')
-        count = item.get('count', 0)
-
-        if lid == "CURRENCY_champion":
-            blue = count
-        elif lid == "CURRENCY_cosmetic":
-            orange = count
-        elif lid.startswith("CHEST"):
-            chests += count
-        elif lid.startswith("MATERIAL_key"):
-            keys += count
-
-    if blue > 499:
-        print(f"🔵 Blue essence: {blue}")
-    if orange > 499:
-        print(f"🟠 Orange essence: {orange}")
-    if chests > 0:
-        print(f"📦 Hextech chests: {chests}")
-    if keys > 0:
-        print(f"🗝️ Hextech keys: {keys}")
-
-    return loot
-
-
 # =========================
 # SHARDS (SIN CAMBIOS)
 # =========================
@@ -456,22 +209,6 @@ def get_champion_skins_shards_list():
     return champ_str.strip(), skin_str.strip()
 
 
-def get_refund_info():
-    info, headers = get_connection()
-    if not info:
-        print("❌ No se encontró el lockfile. ¿Está abierto el cliente de LoL?")
-        return 0
-
-    url = f"https://127.0.0.1:{info['port']}/lol-store/v1/refund-inventory"
-
-    response = requests.get(url, headers=headers, verify=False)
-
-    if response.status_code != 200:
-        return 0  # 🔒 no romper output si falla
-
-    data = response.json()
-    return data.get("refundCredits", 0)
-
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def delete_all_friends():
@@ -509,7 +246,12 @@ def delete_all_friends():
         for _ in as_completed(futures):
             pass
 
-def get_real_region():
+
+def get_seller_name():
+    return "⭐ BUDA  ⭐  BOOST ⭐"
+
+
+def get_server_region():
     info, headers = get_connection()
     if not info:
         return "Desconocido"
@@ -523,7 +265,6 @@ def get_real_region():
 
         data = response.json()
 
-        # ✅ FIX AQUÍ
         region_raw = data.get("LoginDataPacket", {}).get("platformId", "").lower()
 
         region_map = {
@@ -540,24 +281,404 @@ def get_real_region():
             'oc1': 'OCE'
         }
 
-        return region_map.get(region_raw, region_raw.upper() if region_raw else "Desconocido")
+        if region_raw:
+            return region_map.get(region_raw, region_raw.upper())
+
+        return "Desconocido"
 
     except Exception as e:
         print("❌ Error obteniendo región:", e)
         return "Desconocido"
+    
+def get_summoner_level():
+    info, headers = get_connection()
+    if not info:
+        return None
+
+    try:
+        url = f"https://127.0.0.1:{info['port']}/lol-summoner/v1/current-summoner"
+        response = requests.get(url, headers=headers, verify=False)
+
+        if response.status_code != 200:
+            return None
+
+        data = response.json()
+        return data.get("summonerLevel")
+
+    except Exception as e:
+        print("❌ Error obteniendo nivel:", e)
+        return None
+    
+    
+def get_rank_info():
+    info, headers = get_connection()
+    if not info:
+        return "Unranked"
+
+    url = f"https://127.0.0.1:{info['port']}/lol-ranked/v1/current-ranked-stats"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return "Unranked"
+
+    if response.status_code != 200:
+        return "Unranked"
+
+    data = response.json()
+
+    soloq = next(
+        (q for q in data.get('queues', []) if q.get('queueType') == 'RANKED_SOLO_5x5'),
+        None
+    )
+
+    if not soloq:
+        return "Unranked"
+
+    # 🔥 Si está en placements → no mostrar rank
+    if soloq.get("type") == "placements":
+        return "Unranked"
+
+    tier = soloq.get("tier", "Unknown").capitalize()
+    division = soloq.get("division", "")
+    lp = soloq.get("leaguePoints", 0)
+
+    return f"{tier} {division} - {lp} LP"
+
+
+def get_placements_info():
+    info, headers = get_connection()
+    if not info:
+        return None
+
+    url = f"https://127.0.0.1:{info['port']}/lol-ranked/v1/current-ranked-stats"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    data = response.json()
+
+    soloq = next(
+        (q for q in data.get('queues', []) if q.get('queueType') == 'RANKED_SOLO_5x5'),
+        None
+    )
+
+    if not soloq:
+        return None
+
+    # 🔥 Solo si está en placements
+    if soloq.get("type") == "placements":
+        played = soloq.get("played", 0)
+        return f"📊 {played} Placements played"
+
+    return None
+
+def get_champions_count():
+    info, headers = get_connection()
+    if not info:
+        return None
+
+    url = f"https://127.0.0.1:{info['port']}/lol-champions/v1/owned-champions-minimal"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    champs = response.json()
+    return len(champs)
+
+def get_skins_count():
+    info, headers = get_connection()
+    if not info:
+        return None
+
+    url = f"https://127.0.0.1:{info['port']}/lol-inventory/v2/inventory/CHAMPION_SKIN"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    skins_data = response.json()
+    owned_ids = [s['itemId'] for s in skins_data]
+
+    id_to_name = get_skin_map()
+
+    return sum(1 for sid in owned_ids if sid in id_to_name)
+
+
+def get_blue_essence():
+    info, headers = get_connection()
+    if not info:
+        return None
+
+    url = f"https://127.0.0.1:{info['port']}/lol-loot/v1/player-loot"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    loot = response.json()
+
+    for item in loot:
+        if item.get('lootId') == "CURRENCY_champion":
+            return item.get('count', 0)
+
+    return 0
+
+def get_orange_essence():
+    info, headers = get_connection()
+    if not info:
+        return None
+
+    url = f"https://127.0.0.1:{info['port']}/lol-loot/v1/player-loot"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    loot = response.json()
+
+    for item in loot:
+        if item.get('lootId') == "CURRENCY_cosmetic":
+            return item.get('count', 0)
+
+    return 0
+
+def get_hextech_chests():
+    info, headers = get_connection()
+    if not info:
+        return None
+
+    url = f"https://127.0.0.1:{info['port']}/lol-loot/v1/player-loot"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    loot = response.json()
+
+    chests = 0
+
+    for item in loot:
+        loot_id = item.get('lootId', '')
+        if loot_id.startswith("CHEST"):
+            chests += item.get('count', 0)
+
+    return chests
+
+def get_hextech_keys():
+    info, headers = get_connection()
+    if not info:
+        return None
+
+    url = f"https://127.0.0.1:{info['port']}/lol-loot/v1/player-loot"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    loot = response.json()
+
+    keys = 0
+
+    for item in loot:
+        loot_id = item.get('lootId', '')
+        if loot_id.startswith("MATERIAL_key"):
+            keys += item.get('count', 0)
+
+    return keys
+
+def get_refunds_remaining():
+    info, headers = get_connection()
+    if not info:
+        return None
+
+    url = f"https://127.0.0.1:{info['port']}/lol-store/v1/refund-inventory"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    data = response.json()
+    return data.get("refundCredits", 0)
+
+def can_change_name():
+    info, headers = get_connection()
+    if not info:
+        return None
+
+    url = f"https://127.0.0.1:{info['port']}/lol-summoner/v1/name-change"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    data = response.json()
+
+    return data.get("canChangeSummonerName", False)
+
+
+def get_champions_list():
+    info, headers = get_connection()
+    if not info:
+        return None
+
+    url = f"https://127.0.0.1:{info['port']}/lol-champions/v1/owned-champions-minimal"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    champs = response.json()
+    id_to_name = get_champion_id_map()
+
+    names = []
+    for champ in champs:
+        champ_id = champ['id']
+        nombre = id_to_name.get(champ_id, f"Desconocido (ID: {champ_id})")
+        names.append(nombre)
+
+    return sorted(names)
+
+def print_summary(seller_name, server_region, summoner_level, rank_info, placements, champions_count, skins_count, blue_essence, orange_essence, chests_count, keys_count, refunds_remaining, can_change_name):
+    print(seller_name)
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━")
+    if server_region != "Desconocido":
+        print(f"🌐 Server: {server_region}")
+    if summoner_level is not None:
+        print(f"📈 Level: {summoner_level}")
+    print(f"🎯Rank(Soloq): {rank_info}")
+    if placements is not None:
+        print(f"📊 Placements: {placements}")
+    if champions_count is not None:
+        print(f"👤 Champions: {champions_count}")
+    if skins_count is not None:
+        print(f"🎨 Skins: {skins_count}")
+    if blue_essence is not None and blue_essence > 499:
+        print(f"🔵 Blue Essence: {blue_essence}")
+    if orange_essence is not None and orange_essence > 499:
+        print(f"🟠 Orange Essence: {orange_essence}")
+    if chests_count is not None:
+        print(f"📦 Hextech Chests: {chests_count}")
+    if keys_count is not None:
+        print(f"🗝️ Hextech Keys: {keys_count}")
+    if refunds_remaining is not None:
+        print(f"🔙 Refunds Remaining: {refunds_remaining}")
+    if can_change_name is not None and can_change_name:
+        print("🔄 Can change nickname")
+    print("✉️  Can change e-mail\n🔐 Full access\n✅ 0% Ban Chance\n🚀 Instant Delivery")
+
 
 # =========================
 # MAIN
 # =========================
 
+from concurrent.futures import ThreadPoolExecutor
+
 if __name__ == "__main__":
-    print("⭐ BUDA  ⭐  BOOST ⭐\n")  # 👈 ARRIBA DEL TODO
-    print("━━━━━━━━━━━━━━━━━━━━━━━━━")
 
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {
+            "seller": executor.submit(get_seller_name),
+            "server": executor.submit(get_server_region),
+            "level": executor.submit(get_summoner_level),
+            "rank": executor.submit(get_rank_info),
+            "placements": executor.submit(get_placements_info),
+            "champions_count": executor.submit(get_champions_count),
+            "skins_count": executor.submit(get_skins_count),
+            "blue_essence": executor.submit(get_blue_essence),
+            "orange_essence": executor.submit(get_orange_essence),
+            "chests_count": executor.submit(get_hextech_chests),
+            "keys_count": executor.submit(get_hextech_keys),
+            "refunds_remaining": executor.submit(get_refunds_remaining),
+            "can_change": executor.submit(can_change_name),
+            "champions_list": executor.submit(get_champions_list),
+        }
+
+        # 🔥 Resolver resultados
+        seller = futures["seller"].result()
+        server = futures["server"].result()
+        level = futures["level"].result()
+        rank = futures["rank"].result()
+        placements = futures["placements"].result()
+        champions_count = futures["champions_count"].result()
+        skins_count = futures["skins_count"].result()
+        blue_essence = futures["blue_essence"].result()
+        orange_essence = futures["orange_essence"].result()
+        chests_count = futures["chests_count"].result()
+        keys_count = futures["keys_count"].result()
+        refunds_remaining = futures["refunds_remaining"].result()
+        can_change = futures["can_change"].result()
+        champions_list = futures["champions_list"].result()
+
+    # ✅ Print ordenado
+    print_summary(
+        seller,
+        server,
+        level,
+        rank,
+        placements,
+        champions_count,
+        skins_count,
+        blue_essence,
+        orange_essence,
+        chests_count,
+        keys_count,
+        refunds_remaining,
+        can_change
+    )
+
+    # 🔹 Acción aparte (mejor fuera de threads)
     delete_all_friends()
-    get_current_summoner()
-    get_show_skins()
 
+    # 🔹 Lista de champions
+    if champions_list:
+        print(f"\nChampions ({len(champions_list)}):")
+        for champ in champions_list:
+            print(f"- {champ}")
+
+    # 🔹 Shards (podés paralelizar esto también si querés)
     champ_shard_list, skin_shard_list = get_champion_skins_shards_list()
 
     if champ_shard_list and champ_shard_list.count("-") != 0:
