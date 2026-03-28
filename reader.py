@@ -581,6 +581,23 @@ def get_champions_list():
 
     return sorted(names)
 
+def set_status_message(message):
+    info, headers = get_connection()
+    if not info:
+        return False
+
+    url = f"https://127.0.0.1:{info['port']}/lol-chat/v1/me"
+
+    payload = {
+        "statusMessage": message
+    }
+
+    try:
+        response = requests.put(url, json=payload, headers=headers, verify=False)
+        return response.status_code == 200
+    except:
+        return False
+
 def print_summary(seller_name, server_region, summoner_level, rank_info, placements, champions_count, skins_count, blue_essence, orange_essence, chests_count, keys_count, refunds_remaining, can_change_name):
     print(seller_name)
     print("━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -688,6 +705,10 @@ if __name__ == "__main__":
     if skin_shard_list and skin_shard_list.count("-") != 0:
         print("\n")
         print(skin_shard_list)
+        
+    set_status_message(
+        "⭐ BUDA BOOST ⭐ | Unranked | 30K BE | Full Access"
+    )
 
 
 
