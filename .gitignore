@@ -399,3 +399,7 @@ FodyWeavers.xsd
 
 # Environment variables file (contains sensitive information, should not be committed to source control)
 .env
+
+dist
+build
+*.spec
