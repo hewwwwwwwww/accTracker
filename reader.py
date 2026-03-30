@@ -533,6 +533,51 @@ def get_champions_list():
 
     return sorted(names)
 
+def get_skins_list():
+    info, headers = get_connection()
+    if not info:
+        return None
+
+    url = f"https://127.0.0.1:{info['port']}/lol-inventory/v2/inventory/CHAMPION_SKIN"
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+    except:
+        return None
+
+    if response.status_code != 200:
+        return None
+
+    skins_data = response.json()
+    id_to_name = get_skin_map()
+
+    names = []
+
+    for s in skins_data:
+        sid = s['itemId']
+
+        # 🔥 FILTRO REAL
+        if s.get("ownershipType") != "OWNED":
+            continue
+
+        name = id_to_name.get(sid)
+
+        # 🔥 fallback MUY IMPORTANTE
+        if not name:
+            name = s.get("name") or s.get("itemDesc")
+
+        if not name:
+            continue
+
+        # ❌ filtrar chromas por nombre (mejor que por ID)
+        if "chroma" in name.lower():
+            continue
+
+        names.append(name)
+
+    return sorted(set(names))
+
+
 def set_status_message(message):
     info, headers = get_connection()
     if not info:
@@ -724,6 +769,7 @@ if __name__ == "__main__":
             "refunds_remaining": executor.submit(get_refunds_remaining),
             "can_change": executor.submit(can_change_name),
             "champions_list": executor.submit(get_champions_list),
+            "skins_list": executor.submit(get_skins_list)
         }
 
         # 🔥 Resolver resultados
@@ -741,6 +787,8 @@ if __name__ == "__main__":
         refunds_remaining = futures["refunds_remaining"].result()
         can_change = futures["can_change"].result()
         champions_list = futures["champions_list"].result()
+        skins_list = futures["skins_list"].result()
+
 
     # ✅ Print ordenado
     print_summary(
@@ -767,6 +815,12 @@ if __name__ == "__main__":
         print(f"\nChampions ({len(champions_list)}):")
         for champ in champions_list:
             print(f"- {champ}")
+    
+    # 🔹 Lista de skins
+    if skins_list:
+        print(f"\nSkins ({len(skins_list)}):")
+        for skin in skins_list:
+            print(f"- {skin}")
 
     # 🔹 Shards (podés paralelizar esto también si querés)
     champ_shard_list, skin_shard_list = get_champion_skins_shards_list()
@@ -785,17 +839,6 @@ if __name__ == "__main__":
 
     win, losses = get_rank_wins_losses()
     lp_per_win = estimate_lp_per_win(win, losses, level) if win and losses else None
-
-    # title = generate_title(
-    #     server=server,
-    #     rank=rank,
-    #     level=level,
-    #     skins=skins_count,
-    #     lp_per_win=lp_per_win,
-    #     champions=champions_count
-    # )
-    # print("\nGenerated Title:")
-    # print(title)
 
     title = generate_title_v2(
         server=server,
